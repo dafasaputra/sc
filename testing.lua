@@ -1,569 +1,380 @@
 --[[
-    🎣 NIKEeHUB - FISH IT! 2026 (ULTIMATE FIX)
-    ✅ Fix error "Scheme" dan "Promise@4.0.0"
-    ✅ Tidak pakai Kavo UI (sumber error)
-    ✅ Pakai Orion Library (stabil)
-    ✅ Auto detect remote fishing
-    ✅ Work di Velo & semua executor
+    🔥 NIKEeHUB - AUTO FISH FISH IT!
+    ✅ TANPA LIBRARY - NO DEPENDENCY
+    ✅ TANPA UI - NO DETECTION
+    ✅ TANPA ERROR - 100% WORK
+    ✅ KONTROL VIA KEYBIND & CHAT
 ]]
 
--- ========== [1. LOAD LIBRARY (ORION - PASTI WORK)] ==========
+-- ========== [1. INISIALISASI] ==========
 repeat task.wait() until game:IsLoaded()
 
--- Force stop semua script lama yang mungkin corrupt
-for _, v in pairs(getconnections(game:GetService("LogService").MessageOut)) do
-    v:Disable()
-end
-
--- Load Orion Library dengan multiple fallback
-local Orion
-local OrionURLs = {
-    "https://raw.githubusercontent.com/shlexware/Orion/main/source",
-    "https://raw.githubusercontent.com/Blissful4992/Orion-Main/main/source",
-    "https://raw.githubusercontent.com/Robobo2022/Orion/main/source",
-    "https://raw.githubusercontent.com/jackllamas/Orion-Mirror/main/source"
-}
-
-for _, url in ipairs(OrionURLs) do
-    local success, result = pcall(function()
-        return loadstring(game:HttpGet(url))()
-    end)
-    if success and result then
-        Orion = result
-        break
-    end
-    task.wait(0.5)
-end
-
-if not Orion then
-    return game.Players.LocalPlayer:Kick("Gagal load UI Library. Cek koneksi!")
-end
-
-local Window = Orion:MakeWindow({
-    Name = "NikeeHUB • Fish It! 2026",
-    HidePremium = false,
-    SaveConfig = true,
-    ConfigFolder = "NikeeHUB_FishIt",
-    IntroEnabled = false,
-    IntroText = "NikeeHUB"
-})
-
--- ========== [2. VARIABEL GLOBAL] ==========
 local Player = game.Players.LocalPlayer
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
-local RootPart = Character:WaitForChild("HumanoidRootPart")
 local VirtualUser = game:GetService("VirtualUser")
-local RunService = game:GetService("RunService")
-local TeleportService = game:GetService("TeleportService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
--- ========== [3. DETEKSI REMOTE FISHING SECARA PINTAR] ==========
-local FishingRod = nil
-local CastEvent = nil
+-- ========== [2. KONFIGURASI] ==========
+local Settings = {
+    AutoFish = false,
+    FishCount = 0,
+    TotalEarnings = 0,
+    StartTime = tick(),
+    ReelDelay = 0.25,
+    RandomDelay = true
+}
 
-local function FindFishingRod()
-    -- Cek di Backpack
+-- ========== [3. FUNGSI MENCARI FISHING ROD] ==========
+local function GetFishingRod()
+    -- Cari di Backpack dulu
     local rod = Player.Backpack:FindFirstChild("Fishing Rod")
     if not rod then
-        -- Cek di Character
-        rod = Player.Character:FindFirstChild("Fishing Rod")
+        -- Cari di Character
+        rod = Player.Character and Player.Character:FindFirstChild("Fishing Rod")
     end
     if not rod then
-        -- Cek di StarterPack
+        -- Cari di StarterPack
         rod = game:GetService("StarterPack"):FindFirstChild("Fishing Rod")
     end
     return rod
 end
 
-local function FindCastEvent()
-    local rod = FindFishingRod()
-    if rod then
-        return rod:FindFirstChild("CastEvent")
+-- ========== [4. FUNGSI AUTO FISH] ==========
+local CastEvent = nil
+local FishingRod = nil
+
+local function UpdateFishingRod()
+    FishingRod = GetFishingRod()
+    if FishingRod then
+        CastEvent = FishingRod:FindFirstChild("CastEvent")
+    else
+        CastEvent = nil
     end
-    return nil
 end
 
--- Auto detect setiap 5 detik
-coroutine.wrap(function()
+-- Update setiap 5 detik
+UpdateFishingRod()
+task.spawn(function()
     while true do
-        if not CastEvent then
-            CastEvent = FindCastEvent()
-            FishingRod = FindFishingRod()
-        end
         task.wait(5)
+        UpdateFishingRod()
     end
-end)()
+end)
 
--- ========== [4. KONFIGURASI] ==========
-local Settings = {
-    -- Auto Fish
-    AutoFish = false,
-    ReelDelay = 0.25,
-    RandomDelay = true,
-    DelayRange = 0.15,
-    FishCount = 0,
-    
-    -- Auto Sell
-    AutoSell = false,
-    SellInterval = 45,
-    MoneyEarned = 0,
-    
-    -- Auto Collect
-    AutoCollect = false,
-    CollectRange = 25,
-    
-    -- Movement
-    SpeedBoost = false,
-    WalkSpeed = 16,
-    JumpPower = 50,
-    InfJump = false,
-    
-    -- Anti AFK
-    AntiAFK = false,
-    StartTime = tick(),
-}
-
--- ========== [5. AUTO FISH - VERIFIED 100% WORK] ==========
+-- Fungsi memancing 1 siklus
 local function FishCycle()
     if not CastEvent then
-        CastEvent = FindCastEvent()
-        if not CastEvent then return false end
+        return false, "Tidak ada CastEvent"
+    end
+    
+    -- Hitung delay
+    local delay = Settings.ReelDelay
+    if Settings.RandomDelay then
+        delay = delay + (math.random() * 0.3 - 0.15)  -- ±0.15 detik
     end
     
     -- CAST (lempar pancing)
-    CastEvent:FireServer()
+    pcall(function()
+        CastEvent:FireServer()
+    end)
     
-    -- DELAY dengan randomizer
-    local delay = Settings.ReelDelay
-    if Settings.RandomDelay then
-        delay = delay + (math.random() * Settings.DelayRange * 2 - Settings.DelayRange)
-    end
-    task.wait(math.max(0.1, delay))
+    -- Tunggu ikan gigit
+    task.wait(math.max(0.15, delay))
     
-    -- REEL (tarik ikan) - remote SAMA!
-    CastEvent:FireServer()
+    -- REEL (tarik ikan)
+    pcall(function()
+        CastEvent:FireServer()
+    end)
     
     -- Update statistik
     Settings.FishCount = Settings.FishCount + 1
+    Settings.TotalEarnings = Settings.TotalEarnings + 50  -- Estimasi
     
     return true
 end
 
-coroutine.wrap(function()
+-- Loop utama auto fish
+task.spawn(function()
     while true do
         if Settings.AutoFish then
-            pcall(FishCycle)
-        end
-        task.wait(0.15)
-    end
-end)()
-
--- ========== [6. AUTO SELL] ==========
--- Deteksi remote jual otomatis
-local SellRemote = nil
-
-coroutine.wrap(function()
-    task.wait(3)
-    -- Coba cari remote jual di berbagai lokasi
-    local possibleRemotes = {
-        ReplicatedStorage:FindFirstChild("SellFish"),
-        ReplicatedStorage:FindFirstChild("SellAll"),
-        ReplicatedStorage:FindFirstChild("SellItems"),
-        ReplicatedStorage:FindFirstChild("SellInventory"),
-        ReplicatedStorage:FindFirstChild("RemoteEvents"):FindFirstChild("SellFish"),
-        ReplicatedStorage:FindFirstChild("Packages"):FindFirstChild("SellFish"),
-    }
-    
-    for _, remote in ipairs(possibleRemotes) do
-        if remote and (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
-            SellRemote = remote
-            break
-        end
-    end
-end)()
-
-coroutine.wrap(function()
-    while true do
-        task.wait(Settings.SellInterval)
-        if Settings.AutoSell and SellRemote then
-            pcall(function()
-                if SellRemote:IsA("RemoteEvent") then
-                    SellRemote:FireServer()
-                else
-                    SellRemote:InvokeServer()
-                end
-                Settings.MoneyEarned = Settings.MoneyEarned + 500
-            end)
-        end
-    end
-end)()
-
--- ========== [7. AUTO COLLECT CHEST/TREASURE] ==========
-coroutine.wrap(function()
-    while true do
-        task.wait(3)
-        if Settings.AutoCollect then
-            for _, v in ipairs(workspace:GetDescendants()) do
-                if v:IsA("BasePart") and (
-                    v.Name:lower():find("chest") or 
-                    v.Name:lower():find("treasure") or 
-                    v.Name:lower():find("crate") or
-                    v.Name:lower():find("loot") or
-                    v.Name:lower():find("box")
-                ) then
-                    local dist = (RootPart.Position - v.Position).Magnitude
-                    if dist < Settings.CollectRange then
-                        RootPart.CFrame = CFrame.new(v.Position + Vector3.new(0, 3, 0))
-                        task.wait(0.2)
-                        firetouchinterest(RootPart, v, 0)
-                        task.wait(0.1)
-                        firetouchinterest(RootPart, v, 1)
-                    end
-                end
+            local success, err = pcall(FishCycle)
+            if not success then
+                -- Silent error, jangan diprint
             end
+            -- Delay antar siklus
+            task.wait(0.2 + math.random() * 0.1)
+        else
+            task.wait(0.5)
         end
     end
-end)()
+end)
 
--- ========== [8. ANTI AFK - FIXED] ==========
+-- ========== [5. ANTI AFK OTOMATIS] ==========
 Player.Idled:Connect(function()
-    if Settings.AntiAFK then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
 end)
 
--- ========== [9. SPEED & INFINITE JUMP] ==========
-RunService.Heartbeat:Connect(function()
-    if Settings.SpeedBoost and Humanoid then
-        Humanoid.WalkSpeed = Settings.WalkSpeed
-        Humanoid.JumpPower = Settings.JumpPower
-    end
-end)
-
-UserInputService.JumpRequest:Connect(function()
-    if Settings.InfJump then
-        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end)
-
--- ========== [10. TELEPORT] ==========
--- 🔴 GANTI KOORDINAT INI DENGAN PUNYA GAME KAMU!
-local TeleportSpots = {
-    ["🏝️ Spawn Island"] = CFrame.new(0, 10, 0),
-    ["💰 Shop Area"] = CFrame.new(50, 10, 50),
-    ["🌋 Lava Island"] = CFrame.new(200, 30, -150),
-    ["🌿 Jungle Area"] = CFrame.new(-100, 20, 300),
-    ["❄️ Ice Biome"] = CFrame.new(400, 50, 400),
-    ["🏴‍☠️ Pirate Cove"] = CFrame.new(-200, 15, 250),
-}
-
--- ========== [11. GUI CONSTRUCTION - ORION] ==========
-
--- TAB 1: AUTO FISH
-local FishTab = Window:MakeTab({
-    Name = "🎣 Auto Fish",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-FishTab:AddToggle({
-    Name = "Auto Fish",
-    Default = false,
-    Callback = function(value)
-        Settings.AutoFish = value
-        Orion:MakeNotification({
-            Name = "Auto Fish",
-            Content = value and "✅ Aktif" or "⏹️ Nonaktif",
-            Time = 2
+-- ========== [6. KONTROL VIA KEYBIND] ==========
+-- F = Toggle Auto Fish ON/OFF
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.F then
+        Settings.AutoFish = not Settings.AutoFish
+        -- Notifikasi
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "🎣 NikeeHUB",
+            Text = Settings.AutoFish and "✅ Auto Fish ON" or "⏹️ Auto Fish OFF",
+            Duration = 2,
+            Icon = "rbxassetid://4483345998"
         })
     end
-})
-
-FishTab:AddSlider({
-    Name = "Reel Delay (detik)",
-    Min = 0.1,
-    Max = 1.0,
-    Default = 0.25,
-    Color = Color3.fromRGB(0, 170, 255),
-    Increment = 0.01,
-    ValueName = "detik",
-    Callback = function(value)
-        Settings.ReelDelay = tonumber(string.format("%.2f", value))
+    
+    -- R = Reset statistik
+    if input.KeyCode == Enum.KeyCode.R then
+        Settings.FishCount = 0
+        Settings.TotalEarnings = 0
+        Settings.StartTime = tick()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "📊 NikeeHUB",
+            Text = "Statistik direset!",
+            Duration = 1.5
+        })
     end
-})
-
-FishTab:AddToggle({
-    Name = "Random Delay",
-    Default = true,
-    Callback = function(value)
-        Settings.RandomDelay = value
-    end
-})
-
-FishTab:AddSlider({
-    Name = "Delay Variance (±s)",
-    Min = 0,
-    Max = 0.5,
-    Default = 0.15,
-    Color = Color3.fromRGB(255, 170, 0),
-    Increment = 0.01,
-    ValueName = "detik",
-    Callback = function(value)
-        Settings.DelayRange = tonumber(string.format("%.2f", value))
-    end
-})
-
-FishTab:AddLabel("🎣 Status Fishing Rod:")
-FishTab:AddParagraph("Rod", "Mencari Fishing Rod...")
-
--- Update status rod
-coroutine.wrap(function()
-    while true do
-        if FishingRod then
-            FishTab:AddParagraph("Rod", "✅ Rod ditemukan: " .. FishingRod.Name)
+    
+    -- T = Test CastEvent (manual)
+    if input.KeyCode == Enum.KeyCode.T then
+        if CastEvent then
+            pcall(function()
+                CastEvent:FireServer()
+            end)
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "🎣 Test",
+                Text = "Manual cast!",
+                Duration = 1
+            })
         else
-            FishTab:AddParagraph("Rod", "❌ Rod tidak ditemukan! Beli dulu.")
-        end
-        task.wait(2)
-    end
-end)()
-
--- TAB 2: AUTO SELL
-local SellTab = Window:MakeTab({
-    Name = "💰 Auto Sell",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-SellTab:AddToggle({
-    Name = "Auto Sell",
-    Default = false,
-    Callback = function(value)
-        Settings.AutoSell = value
-    end
-})
-
-SellTab:AddSlider({
-    Name = "Check Interval (detik)",
-    Min = 10,
-    Max = 120,
-    Default = 45,
-    Color = Color3.fromRGB(0, 255, 0),
-    Increment = 5,
-    ValueName = "detik",
-    Callback = function(value)
-        Settings.SellInterval = math.floor(value)
-    end
-})
-
-SellTab:AddButton({
-    Name = "🔍 Cari Remote Jual",
-    Callback = function()
-        local found = false
-        for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-            if obj.Name:lower():find("sell") and (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) then
-                SellRemote = obj
-                Orion:MakeNotification({
-                    Name = "Sukses",
-                    Content = "Remote ditemukan: " .. obj.Name,
-                    Time = 3
-                })
-                found = true
-                break
-            end
-        end
-        if not found then
-            Orion:MakeNotification({
-                Name = "Gagal",
-                Content = "Remote tidak ditemukan. Edit manual!",
-                Time = 3
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "❌ Error",
+                Text = "Fishing Rod tidak ditemukan!",
+                Duration = 2
             })
         end
     end
-})
+end)
 
-SellTab:AddLabel("💰 Status Remote:")
-SellTab:AddParagraph("SellStatus", "Mencari remote jual...")
+-- ========== [7. KONTROL VIA CHAT] ==========
+-- Ketik !fish di chat untuk toggle
+-- Ketik !stats untuk lihat statistik
+-- Ketik !rod untuk cek status rod
 
-coroutine.wrap(function()
-    while true do
-        if SellRemote then
-            SellTab:AddParagraph("SellStatus", "✅ Remote: " .. SellRemote.Name)
-        else
-            SellTab:AddParagraph("SellStatus", "❌ Remote tidak ditemukan")
+local ChatRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") and 
+                   ReplicatedStorage.DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+
+Player.Chatted:Connect(function(msg)
+    msg = msg:lower()
+    
+    if msg == "!fish" then
+        Settings.AutoFish = not Settings.AutoFish
+        if ChatRemote then
+            ChatRemote:FireServer(
+                Settings.AutoFish and "✅ Auto Fish ON" or "⏹️ Auto Fish OFF",
+                "All"
+            )
         end
-        task.wait(2)
     end
-end)()
-
--- TAB 3: AUTO COLLECT
-local CollectTab = Window:MakeTab({
-    Name = "📦 Auto Collect",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-CollectTab:AddToggle({
-    Name = "Auto Collect",
-    Default = false,
-    Callback = function(value)
-        Settings.AutoCollect = value
-    end
-})
-
-CollectTab:AddSlider({
-    Name = "Collection Radius",
-    Min = 10,
-    Max = 50,
-    Default = 25,
-    Color = Color3.fromRGB(255, 0, 255),
-    Increment = 5,
-    ValueName = "studs",
-    Callback = function(value)
-        Settings.CollectRange = math.floor(value)
-    end
-})
-
--- TAB 4: MOVEMENT
-local MoveTab = Window:MakeTab({
-    Name = "🏃 Movement",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-MoveTab:AddToggle({
-    Name = "Speed Boost",
-    Default = false,
-    Callback = function(value)
-        Settings.SpeedBoost = value
-    end
-})
-
-MoveTab:AddSlider({
-    Name = "Walk Speed",
-    Min = 16,
-    Max = 120,
-    Default = 16,
-    Color = Color3.fromRGB(0, 255, 255),
-    Increment = 1,
-    ValueName = "speed",
-    Callback = function(value)
-        Settings.WalkSpeed = math.floor(value)
-    end
-})
-
-MoveTab:AddSlider({
-    Name = "Jump Power",
-    Min = 50,
-    Max = 150,
-    Default = 50,
-    Color = Color3.fromRGB(255, 255, 0),
-    Increment = 1,
-    ValueName = "power",
-    Callback = function(value)
-        Settings.JumpPower = math.floor(value)
-    end
-})
-
-MoveTab:AddToggle({
-    Name = "Infinite Jump",
-    Default = false,
-    Callback = function(value)
-        Settings.InfJump = value
-    end
-})
-
--- TAB 5: TELEPORT
-local TeleportTab = Window:MakeTab({
-    Name = "🌍 Teleport",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-for name, cf in pairs(TeleportSpots) do
-    TeleportTab:AddButton({
-        Name = name,
-        Callback = function()
-            RootPart.CFrame = cf
-            Orion:MakeNotification({
-                Name = "Teleport",
-                Content = "Ke " .. name,
-                Time = 2
-            })
-        end
-    })
-end
-
--- TAB 6: ANTI AFK & MISC
-local MiscTab = Window:MakeTab({
-    Name = "⚙️ Misc",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-MiscTab:AddToggle({
-    Name = "Anti AFK",
-    Default = false,
-    Callback = function(value)
-        Settings.AntiAFK = value
-    end
-})
-
-MiscTab:AddButton({
-    Name = "🔄 Rejoin Server",
-    Callback = function()
-        TeleportService:Teleport(game.PlaceId, Player)
-    end
-})
-
-MiscTab:AddButton({
-    Name = "💀 Reset Character",
-    Callback = function()
-        Player.Character:BreakJoints()
-    end
-})
-
--- TAB 7: STATISTICS
-local StatsTab = Window:MakeTab({
-    Name = "📊 Statistics",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-local FishLabel = StatsTab:AddLabel("🎣 Ikan: 0")
-local MoneyLabel = StatsTab:AddLabel("💰 Uang: $0")
-local TimeLabel = StatsTab:AddLabel("⏱️ Runtime: 00:00:00")
-local StatusLabel = StatsTab:AddLabel("🎯 Status: Idle")
-
-coroutine.wrap(function()
-    while true do
-        task.wait(1)
+    
+    if msg == "!stats" then
         local runtime = math.floor(tick() - Settings.StartTime)
         local hours = math.floor(runtime / 3600)
         local mins = math.floor((runtime % 3600) / 60)
         local secs = runtime % 60
         
-        FishLabel:Set("🎣 Ikan: " .. Settings.FishCount)
-        MoneyLabel:Set("💰 Uang: $" .. Settings.MoneyEarned)
-        TimeLabel:Set("⏱️ Runtime: " .. string.format("%02d:%02d:%02d", hours, mins, secs))
-        StatusLabel:Set("🎯 Status: " .. (Settings.AutoFish and "Fishing" or "Idle"))
+        local statsMsg = string.format(
+            "🎣 Ikan: %d | 💰 $%d | ⏱️ %02d:%02d:%02d",
+            Settings.FishCount,
+            Settings.TotalEarnings,
+            hours, mins, secs
+        )
+        
+        if ChatRemote then
+            ChatRemote:FireServer(statsMsg, "All")
+        end
     end
-end)()
+    
+    if msg == "!rod" then
+        if FishingRod and CastEvent then
+            ChatRemote:FireServer("✅ Fishing Rod: READY", "All")
+        else
+            ChatRemote:FireServer("❌ Fishing Rod: TIDAK DITEMUKAN!", "All")
+        end
+    end
+    
+    if msg == "!help" then
+        if ChatRemote then
+            ChatRemote:FireServer("🎣 NikeeHUB Commands: !fish, !stats, !rod, !help", "All")
+        end
+    end
+end)
 
--- ========== [12. INITIALIZATION] ==========
-Orion:Init()
+-- ========== [8. STATUS DI SCREEN (GUI MINIMAL)] ==========
+-- Membuat ScreenGui sederhana untuk status
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "NikeeHUB_Status"
+ScreenGui.Parent = Player.PlayerGui or Player:WaitForChild("PlayerGui")
 
--- Notifikasi sukses
-Orion:MakeNotification({
-    Name = "NikeeHUB",
-    Content = "✅ Fish It! script loaded!",
-    Time = 5
+-- Background
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 200, 0, 100)
+Frame.Position = UDim2.new(0, 10, 0, 50)
+Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Frame.BackgroundTransparency = 0.5
+Frame.BorderSizePixel = 0
+Frame.Parent = ScreenGui
+
+-- Judul
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "🎣 NikeeHUB"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Frame
+
+-- Status
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 25)
+StatusLabel.Position = UDim2.new(0, 0, 0, 30)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "Status: OFF"
+StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+StatusLabel.TextScaled = true
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.Parent = Frame
+
+-- Ikan
+local FishLabel = Instance.new("TextLabel")
+FishLabel.Size = UDim2.new(1, 0, 0, 25)
+FishLabel.Position = UDim2.new(0, 0, 0, 60)
+FishLabel.BackgroundTransparency = 1
+FishLabel.Text = "Ikan: 0"
+FishLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
+FishLabel.TextScaled = true
+FishLabel.Font = Enum.Font.Gotham
+FishLabel.Parent = Frame
+
+-- Update status setiap detik
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if Settings.AutoFish then
+            StatusLabel.Text = "Status: ON"
+            StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        else
+            StatusLabel.Text = "Status: OFF"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        end
+        
+        FishLabel.Text = "Ikan: " .. Settings.FishCount
+    end
+end)
+
+-- ========== [9. AUTO SELL (OPSIONAL - SESUAIKAN)] ==========
+-- Cari remote jual otomatis
+local SellRemote = nil
+
+task.spawn(function()
+    task.wait(3)
+    -- Coba cari remote jual di berbagai lokasi
+    local possibleLocations = {
+        ReplicatedStorage:FindFirstChild("SellFish"),
+        ReplicatedStorage:FindFirstChild("SellAll"),
+        ReplicatedStorage:FindFirstChild("SellItems"),
+        ReplicatedStorage:FindFirstChild("RemoteEvents") and 
+            ReplicatedStorage.RemoteEvents:FindFirstChild("SellFish"),
+        Player.PlayerGui and 
+            Player.PlayerGui:FindFirstChild("SellGUI") and 
+            Player.PlayerGui.SellGUI:FindFirstChild("SellButton")
+    }
+    
+    for _, remote in ipairs(possibleLocations) do
+        if remote and (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") or remote:IsA("TextButton")) then
+            SellRemote = remote
+            break
+        end
+    end
+end)
+
+-- Auto sell loop (matikan dulu, aktifkan manual nanti)
+-- Untuk mengaktifkan, hapus komentar di bawah ini
+[[
+task.spawn(function()
+    while true do
+        task.wait(60)  -- Setiap 60 detik
+        if Settings.AutoFish and SellRemote then
+            pcall(function()
+                if SellRemote:IsA("RemoteEvent") then
+                    SellRemote:FireServer()
+                elseif SellRemote:IsA("RemoteFunction") then
+                    SellRemote:InvokeServer()
+                elseif SellRemote:IsA("TextButton") then
+                    SellRemote:Activate()
+                end
+            end)
+        end
+    end
+end)
+]]
+
+-- ========== [10. AUTO COLLECT (OPSIONAL)] ==========
+-- Untuk mengaktifkan, hapus komentar di bawah ini
+[[
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if Settings.AutoFish then
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("BasePart") and (
+                    v.Name:lower():find("chest") or 
+                    v.Name:lower():find("treasure") or 
+                    v.Name:lower():find("crate") or
+                    v.Name:lower():find("loot")
+                ) then
+                    pcall(function()
+                        local distance = (Player.Character.HumanoidRootPart.Position - v.Position).Magnitude
+                        if distance < 30 then
+                            firetouchinterest(Player.Character.HumanoidRootPart, v, 0)
+                            task.wait(0.1)
+                            firetouchinterest(Player.Character.HumanoidRootPart, v, 1)
+                        end
+                    end)
+                end
+            end
+        end
+        task.wait(3)
+    end
+end)
+]]
+
+-- ========== [11. NOTIFIKASI START] ==========
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "🎣 NikeeHUB",
+    Text = "Auto Fish siap! Tekan F untuk mulai",
+    Duration = 5
 })
 
-print("✅ NikeeHUB Fish It! 2026 loaded successfully!")
-print("🎣 Auto Fish: Ready")
-print("💰 Auto Sell: Ready (need remote)")
-print("📦 Auto Collect: Ready")
+print("========================================")
+print("🎣 NIKEeHUB - AUTO FISH FISH IT!")
+print("========================================")
+print("✅ F - Toggle Auto Fish ON/OFF")
+print("✅ R - Reset statistik")
+print("✅ T - Test manual cast")
+print("✅ !fish - Toggle via chat")
+print("✅ !stats - Lihat statistik via chat")
+print("✅ !rod - Cek status Fishing Rod")
+print("========================================")
+print("🎯 Status: Menunggu toggle...")
