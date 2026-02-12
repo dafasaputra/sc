@@ -1,5 +1,6 @@
 -- Load Rayfield UI Library
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("NikeeHUB", "Ocean")
 
 -- Create Window
 local Window = Rayfield:CreateWindow({
@@ -445,3 +446,4 @@ Rayfield:Notify({
     Content = "NikeeHUB Enhanced ready!",
     Duration = 5
 })
+
