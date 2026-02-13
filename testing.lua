@@ -1,10 +1,9 @@
 --[[
-    🔥 RIOTESTTING - FISH IT! BLATANT EDITION
-    ✅ DETEKSI ROD DI TANGAN (PRIORITAS) + BACKPACK
-    ✅ BLATANT MODE ON/OFF (TOGGLE)
-    ✅ UI MODERN - DRAGGABLE, TRANSPARAN, WARNA MERAH-HITAM
-    ✅ TANPA LIBRARY - TANPA ERROR NIL
-    ✅ KEYBIND LENGKAP
+    🔥 RIOTESTTING - FISH IT! DIAGNOSTIK EDITION
+    ✅ FORCE DETEKSI ROD - CARI APAPUN YANG PUNYA CASTEVENT
+    ✅ DEBUG LENGKAP - LIHAT DI CONSOLE
+    ✅ UI SEDERHANA - TOMBOL MANUAL
+    ✅ TANPA ASUMSI NAMA ROD - DETEKSI OTOMATIS
 ]]
 
 -- ========== [1. INISIALISASI] ==========
@@ -15,125 +14,111 @@ local VirtualUser = game:GetService("VirtualUser")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
-local TweenService = game:GetService("TweenService")
 
--- ========== [2. KONFIGURASI] ==========
-local Settings = {
-    -- AUTO FISH
-    AutoFish = false,
-    FishCount = 0,
-    TotalEarnings = 0,
-    StartTime = tick(),
-    
-    -- BLATANT MODE (DEFAULT ON)
-    BlatantMode = true,
-    
-    -- DELAY (BLATANT = 0.01, LEGIT = 0.3)
-    ReelDelay = 0.01,
-    CycleDelay = 0.01,
-    MultiCast = 3,
-    
-    -- AUTO SELL
-    AutoSell = false,
-    SellDelay = 5,
-    
-    -- AUTO COLLECT
-    AutoCollect = false,
-    CollectRadius = 100,
-    
-    -- SPEED
-    SpeedBoost = false,
-    WalkSpeed = 250,
-    JumpPower = 250,
-    InfJump = false,
-    
-    -- ANTI AFK
-    AntiAFK = true,
-}
+-- ========== [2. DEBUG MODE - LIHAT SEMUA] ==========
+print("========== RIOTESTTING DIAGNOSTIK ==========")
+print("🔍 Mencari tool dengan CastEvent...")
 
--- ========== [3. DAFTAR NAMA ROD RESMI] ==========
-local ROD_NAMES = {
-    "Starter Rod", "Luck Rod", "Carbon Rod", "Toy Rod",
-    "Grass Rod", "Demascus Rod", "Ice Rod", "Lava Rod",
-    "Lucky Rod", "Midnight Rod", "Steampunk Rod", "Chrome Rod",
-    "Fluorescent Rod", "Astral Rod", "Hazmat Rod",
-    "Ares Rod", "Angler Rod", "Ghostfinn Rod", "Bamboo Rod",
-    "Element Rod", "Angelic Rod", "Gold Rod", "Hyper Rod"
-}
-
--- ========== [4. AUTO DETEKSI ROD (PRIORITAS TANGAN)] ==========
-local CastEvent = nil
-local CurrentRod = nil
-local CurrentRodName = "Tidak Ditemukan"
-local RodInHand = false
-
-local function FindRod()
-    -- PRIORITAS 1: CEK DI TANGAN (CHARACTER)
+-- ========== [3. DETEKSI ROD UNIVERSAL] ==========
+local function FindAnyCastEvent()
+    local results = {}
+    
+    -- CEK CHARACTER (TANGAN)
     if Player.Character then
         for _, item in ipairs(Player.Character:GetChildren()) do
             if item:IsA("Tool") then
-                for _, name in ipairs(ROD_NAMES) do
-                    if item.Name == name then
-                        local event = item:FindFirstChild("CastEvent")
-                        if event then
-                            return item, event, name, true
-                        end
-                    end
+                local cast = item:FindFirstChild("CastEvent")
+                if cast then
+                    table.insert(results, {
+                        item = item,
+                        cast = cast,
+                        location = "Tangan",
+                        name = item.Name
+                    })
                 end
             end
         end
     end
     
-    -- PRIORITAS 2: CEK DI BACKPACK
+    -- CEK BACKPACK (TAS)
     for _, item in ipairs(Player.Backpack:GetChildren()) do
-        for _, name in ipairs(ROD_NAMES) do
-            if item.Name == name then
-                local event = item:FindFirstChild("CastEvent")
-                if event then
-                    return item, event, name, false
-                end
+        if item:IsA("Tool") then
+            local cast = item:FindFirstChild("CastEvent")
+            if cast then
+                table.insert(results, {
+                    item = item,
+                    cast = cast,
+                    location = "Tas",
+                    name = item.Name
+                })
             end
         end
     end
     
-    return nil, nil, "Tidak Ditemukan", false
+    return results
 end
 
-local function UpdateRod()
-    local rod, event, name, inHand = FindRod()
-    if rod and event then
-        CurrentRod = rod
-        CastEvent = event
-        CurrentRodName = name
-        RodInHand = inHand
+local detectedRods = FindAnyCastEvent()
+print("🎣 Ditemukan " .. #detectedRods .. " tool dengan CastEvent:")
+for i, rod in ipairs(detectedRods) do
+    print("   " .. i .. ". " .. rod.name .. " (" .. rod.location .. ")")
+end
+
+-- Pilih rod pertama yang ditemukan, atau nil
+local CurrentRod = nil
+local CastEvent = nil
+local CurrentRodName = "Tidak Ada"
+
+if #detectedRods > 0 then
+    CurrentRod = detectedRods[1].item
+    CastEvent = detectedRods[1].cast
+    CurrentRodName = detectedRods[1].name .. " (" .. detectedRods[1].location .. ")"
+    print("✅ Menggunakan: " .. CurrentRodName)
+else
+    print("❌ TIDAK ADA TOOL DENGAN CASTEVENT!")
+    print("   Pastikan kamu sudah membeli dan memegang Fishing Rod.")
+end
+
+-- Fungsi manual pilih rod
+local function SelectRod(index)
+    if index >= 1 and index <= #detectedRods then
+        CurrentRod = detectedRods[index].item
+        CastEvent = detectedRods[index].cast
+        CurrentRodName = detectedRods[index].name .. " (" .. detectedRods[index].location .. ")"
+        return true
+    end
+    return false
+end
+
+-- Fungsi refresh rod
+local function RefreshRod()
+    detectedRods = FindAnyCastEvent()
+    if #detectedRods > 0 then
+        SelectRod(1)
         return true
     else
         CurrentRod = nil
         CastEvent = nil
-        CurrentRodName = "Tidak Ditemukan"
-        RodInHand = false
+        CurrentRodName = "Tidak Ada"
         return false
     end
 end
 
--- Update pertama
-UpdateRod()
+-- ========== [4. AUTO FISH] ==========
+local Settings = {
+    AutoFish = false,
+    FishCount = 0,
+    BlatantMode = true,
+    ReelDelay = 0.01,
+    CycleDelay = 0.01,
+    MultiCast = 3,
+}
 
--- Auto update tiap 2 detik
-task.spawn(function()
-    while true do
-        task.wait(2)
-        UpdateRod()
-    end
-end)
-
--- ========== [5. AUTO FISH - BLATANT / LEGIT] ==========
 local function FishCycle()
     if not CastEvent then return false end
     
     local reelDelay = Settings.BlatantMode and 0.01 or 0.3
     local multiCast = Settings.BlatantMode and 3 or 1
-    local cycleDelay = Settings.BlatantMode and 0.01 or 0.5
     
     for i = 1, multiCast do
         pcall(function()
@@ -144,8 +129,6 @@ local function FishCycle()
         Settings.FishCount = Settings.FishCount + 1
         task.wait(0.01)
     end
-    
-    task.wait(cycleDelay)
     return true
 end
 
@@ -153,517 +136,276 @@ task.spawn(function()
     while true do
         if Settings.AutoFish and CastEvent then
             pcall(FishCycle)
+            task.wait(Settings.BlatantMode and 0.01 or 0.5)
         else
-            task.wait(0.1)
+            task.wait(0.2)
         end
     end
 end)
 
--- ========== [6. AUTO SELL] ==========
-local SellRemote = nil
-local function FindSellRemote()
-    for _, v in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
-        if v.Name:lower():find("sell") and (v:IsA("RemoteEvent") or v:IsA("RemoteFunction")) then
-            return v
-        end
-    end
-    return nil
-end
-
-task.spawn(function()
-    task.wait(3)
-    SellRemote = FindSellRemote()
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(Settings.SellDelay)
-        if Settings.AutoSell and SellRemote then
-            pcall(function()
-                if SellRemote:IsA("RemoteEvent") then
-                    SellRemote:FireServer()
-                else
-                    SellRemote:InvokeServer()
-                end
-                Settings.TotalEarnings = Settings.TotalEarnings + 1000
-            end)
-        end
-    end
-end)
-
--- ========== [7. AUTO COLLECT] ==========
-task.spawn(function()
-    while true do
-        task.wait(1)
-        if Settings.AutoCollect and Player.Character and Player.Character.HumanoidRootPart then
-            for _, v in ipairs(workspace:GetDescendants()) do
-                if v:IsA("BasePart") and (
-                    v.Name:lower():find("chest") or 
-                    v.Name:lower():find("treasure") or 
-                    v.Name:lower():find("crate") or
-                    v.Name:lower():find("loot") or
-                    v.Name:lower():find("box")
-                ) then
-                    local dist = (Player.Character.HumanoidRootPart.Position - v.Position).Magnitude
-                    if dist < Settings.CollectRadius then
-                        Player.Character.HumanoidRootPart.CFrame = CFrame.new(v.Position + Vector3.new(0,3,0))
-                        task.wait(0.05)
-                        firetouchinterest(Player.Character.HumanoidRootPart, v, 0)
-                        task.wait(0.05)
-                        firetouchinterest(Player.Character.HumanoidRootPart, v, 1)
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- ========== [8. SPEED & INF JUMP] ==========
-RunService.Heartbeat:Connect(function()
-    if Settings.SpeedBoost and Player.Character and Player.Character.Humanoid then
-        Player.Character.Humanoid.WalkSpeed = Settings.WalkSpeed
-        Player.Character.Humanoid.JumpPower = Settings.JumpPower
-    end
-end)
-
-UserInputService.JumpRequest:Connect(function()
-    if Settings.InfJump and Player.Character and Player.Character.Humanoid then
-        Player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end)
-
--- ========== [9. ANTI AFK] ==========
-Player.Idled:Connect(function()
-    if Settings.AntiAFK then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end
-end)
-
--- ========== [10. UI MODERN - DRAGGABLE, GLASS EFFECT] ==========
+-- ========== [5. UI SUPER SEDERHANA - PASTI WORK] ==========
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "RioTestting_UI"
-ScreenGui.Parent = Player.PlayerGui or Instance.new("ScreenGui")
-ScreenGui.ResetOnSpawn = false
+ScreenGui.Name = "RioTestting_Diagnostic"
+ScreenGui.Parent = Player.PlayerGui or game.CoreGui
 
 -- Frame utama
-local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 380, 0, 260)
-MainFrame.Position = UDim2.new(0.5, -190, 0.5, -130)  -- Tengah layar
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-MainFrame.BackgroundTransparency = 0.1
-MainFrame.BorderSizePixel = 0
-MainFrame.Parent = ScreenGui
-
--- Bayangan
-local Shadow = Instance.new("ImageLabel")
-Shadow.Size = UDim2.new(1, 10, 1, 10)
-Shadow.Position = UDim2.new(0, -5, 0, -5)
-Shadow.BackgroundTransparency = 1
-Shadow.Image = "rbxassetid://1316045217"
-Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-Shadow.ImageTransparency = 0.8
-Shadow.ScaleType = Enum.ScaleType.Slice
-Shadow.SliceCenter = Rect.new(10, 10, 118, 118)
-Shadow.Parent = MainFrame
-
--- Border glow merah
-local Border = Instance.new("Frame")
-Border.Size = UDim2.new(1, 0, 1, 0)
-Border.BackgroundTransparency = 1
-Border.BorderSizePixel = 3
-Border.BorderColor3 = Color3.fromRGB(255, 50, 50)
-Border.Parent = MainFrame
-
--- Top bar (draggable)
-local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 35)
-TopBar.BackgroundColor3 = Color3.fromRGB(30, 0, 0)
-TopBar.BackgroundTransparency = 0.2
-TopBar.BorderSizePixel = 0
-TopBar.Parent = MainFrame
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 350, 0, 400)
+Frame.Position = UDim2.new(0.5, -175, 0.5, -200)
+Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+Frame.BorderSizePixel = 2
+Frame.BorderColor3 = Color3.fromRGB(255, 50, 50)
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
 
 -- Judul
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -40, 1, 0)
-Title.Position = UDim2.new(0, 10, 0, 0)
-Title.BackgroundTransparency = 1
-Title.Text = "🔥 RIOTESTTING - BLATANT"
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+Title.Text = "🔥 RIOTESTTING - DIAGNOSTIK"
 Title.TextColor3 = Color3.fromRGB(255, 100, 100)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBlack
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TopBar
-
--- Tombol close
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -35, 0, 2.5)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-CloseBtn.BackgroundTransparency = 0.5
-CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.TextScaled = true
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.BorderSizePixel = 0
-CloseBtn.Parent = TopBar
-CloseBtn.MouseButton1Click:Connect(function()
-    MainFrame.Visible = false
-end)
-
--- Tombol minimize
-local MinBtn = Instance.new("TextButton")
-MinBtn.Size = UDim2.new(0, 30, 0, 30)
-MinBtn.Position = UDim2.new(1, -70, 0, 2.5)
-MinBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-MinBtn.BackgroundTransparency = 0.5
-MinBtn.Text = "-"
-MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinBtn.TextScaled = true
-MinBtn.Font = Enum.Font.GothamBold
-MinBtn.BorderSizePixel = 0
-MinBtn.Parent = TopBar
-MinBtn.MouseButton1Click:Connect(function()
-    MainFrame.Visible = not MainFrame.Visible
-    task.wait(0.1)
-    MainFrame.Visible = true  -- toggle, sederhananya sembunyikan
-    -- Implementasi minimize bisa lebih kompleks, sederhanakan
-end)
-
--- Draggable
-local dragging = false
-local dragInput, dragStart, startPos
-
-TopBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-TopBar.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
--- Konten
-local ContentY = 45
-
--- Status Auto Fish
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(0.5, -10, 0, 30)
-StatusLabel.Position = UDim2.new(0, 10, 0, ContentY)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "⚡ AUTO FISH: OFF"
-StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-StatusLabel.TextScaled = true
-StatusLabel.Font = Enum.Font.GothamBold
-StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-StatusLabel.Parent = MainFrame
-
--- Tombol toggle Auto Fish (F)
-local FishBtn = Instance.new("TextButton")
-FishBtn.Size = UDim2.new(0, 80, 0, 30)
-FishBtn.Position = UDim2.new(0.5, -40, 0, ContentY)
-FishBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-FishBtn.BackgroundTransparency = 0.3
-FishBtn.Text = "F: OFF"
-FishBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-FishBtn.TextScaled = true
-FishBtn.Font = Enum.Font.GothamBold
-FishBtn.BorderSizePixel = 0
-FishBtn.Parent = MainFrame
-FishBtn.MouseButton1Click:Connect(function()
-    Settings.AutoFish = not Settings.AutoFish
-    FishBtn.Text = Settings.AutoFish and "F: ON" or "F: OFF"
-    FishBtn.BackgroundColor3 = Settings.AutoFish and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(255, 50, 50)
-end)
-
-ContentY = ContentY + 40
+Title.Parent = Frame
 
 -- Status Rod
-local RodLabel = Instance.new("TextLabel")
-RodLabel.Size = UDim2.new(0.7, -10, 0, 30)
-RodLabel.Position = UDim2.new(0, 10, 0, ContentY)
-RodLabel.BackgroundTransparency = 1
-RodLabel.Text = "🎣 ROD: Mencari..."
-RodLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
-RodLabel.TextScaled = true
-RodLabel.Font = Enum.Font.Gotham
-RodLabel.TextXAlignment = Enum.TextXAlignment.Left
-RodLabel.Parent = MainFrame
+local RodStatus = Instance.new("TextLabel")
+RodStatus.Size = UDim2.new(1, -20, 0, 40)
+RodStatus.Position = UDim2.new(0, 10, 0, 45)
+RodStatus.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+RodStatus.BackgroundTransparency = 0.5
+RodStatus.Text = "🎣 ROD: " .. CurrentRodName
+RodStatus.TextColor3 = CastEvent and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+RodStatus.TextScaled = true
+RodStatus.Font = Enum.Font.Gotham
+RodStatus.Parent = Frame
 
--- Tombol Update Rod (U)
-local UpdateBtn = Instance.new("TextButton")
-UpdateBtn.Size = UDim2.new(0, 60, 0, 30)
-UpdateBtn.Position = UDim2.new(0.7, 10, 0, ContentY)
-UpdateBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 200)
-UpdateBtn.BackgroundTransparency = 0.3
-UpdateBtn.Text = "U"
-UpdateBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-UpdateBtn.TextScaled = true
-UpdateBtn.Font = Enum.Font.GothamBold
-UpdateBtn.BorderSizePixel = 0
-UpdateBtn.Parent = MainFrame
-UpdateBtn.MouseButton1Click:Connect(function()
-    local found = UpdateRod()
+-- Tombol Refresh Rod
+local RefreshBtn = Instance.new("TextButton")
+RefreshBtn.Size = UDim2.new(0.5, -15, 0, 35)
+RefreshBtn.Position = UDim2.new(0, 10, 0, 95)
+RefreshBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 200)
+RefreshBtn.Text = "🔄 REFRESH ROD"
+RefreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+RefreshBtn.TextScaled = true
+RefreshBtn.Font = Enum.Font.GothamBold
+RefreshBtn.BorderSizePixel = 0
+RefreshBtn.Parent = Frame
+RefreshBtn.MouseButton1Click:Connect(function()
+    local found = RefreshRod()
     if found then
-        RodLabel.Text = "🎣 ROD: " .. CurrentRodName .. (RodInHand and " (TANGAN)" or " (TAS)")
-        RodLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        RodStatus.Text = "🎣 ROD: " .. CurrentRodName
+        RodStatus.TextColor3 = Color3.fromRGB(0, 255, 0)
     else
-        RodLabel.Text = "🎣 ROD: TIDAK DITEMUKAN"
-        RodLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        RodStatus.Text = "🎣 ROD: TIDAK DITEMUKAN"
+        RodStatus.TextColor3 = Color3.fromRGB(255, 0, 0)
     end
 end)
 
-ContentY = ContentY + 40
+-- Tombol Pilih Rod Manual
+local ManualLabel = Instance.new("TextLabel")
+ManualLabel.Size = UDim2.new(0.5, -15, 0, 35)
+ManualLabel.Position = UDim2.new(0.5, 5, 0, 95)
+ManualLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+ManualLabel.Text = "📋 PILIH ROD"
+ManualLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+ManualLabel.TextScaled = true
+ManualLabel.Font = Enum.Font.Gotham
+ManualLabel.Parent = Frame
 
--- Ikan Counter
-local FishCountLabel = Instance.new("TextLabel")
-FishCountLabel.Size = UDim2.new(0.5, -10, 0, 30)
-FishCountLabel.Position = UDim2.new(0, 10, 0, ContentY)
-FishCountLabel.BackgroundTransparency = 1
-FishCountLabel.Text = "🐟 IKAN: 0"
-FishCountLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
-FishCountLabel.TextScaled = true
-FishCountLabel.Font = Enum.Font.Gotham
-FishCountLabel.TextXAlignment = Enum.TextXAlignment.Left
-FishCountLabel.Parent = MainFrame
+-- Dropdown sederhana (pakai tombol-tombol)
+local RodListFrame = Instance.new("Frame")
+RodListFrame.Size = UDim2.new(1, -20, 0, 120)
+RodListFrame.Position = UDim2.new(0, 10, 0, 140)
+RodListFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+RodListFrame.BorderSizePixel = 1
+RodListFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+RodListFrame.Visible = false
+RodListFrame.Parent = Frame
 
--- Tombol Reset (R)
-local ResetBtn = Instance.new("TextButton")
-ResetBtn.Size = UDim2.new(0, 60, 0, 30)
-ResetBtn.Position = UDim2.new(0.5, -30, 0, ContentY)
-ResetBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
-ResetBtn.BackgroundTransparency = 0.3
-ResetBtn.Text = "R"
-ResetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ResetBtn.TextScaled = true
-ResetBtn.Font = Enum.Font.GothamBold
-ResetBtn.BorderSizePixel = 0
-ResetBtn.Parent = MainFrame
-ResetBtn.MouseButton1Click:Connect(function()
-    Settings.FishCount = 0
-    Settings.TotalEarnings = 0
-    FishCountLabel.Text = "🐟 IKAN: 0"
+ManualLabel.MouseButton1Click:Connect(function()
+    RodListFrame.Visible = not RodListFrame.Visible
+    -- Update daftar rod
+    for _, v in ipairs(RodListFrame:GetChildren()) do
+        if v:IsA("TextButton") then v:Destroy() end
+    end
+    local y = 5
+    for i, rod in ipairs(detectedRods) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -10, 0, 25)
+        btn.Position = UDim2.new(0, 5, 0, y)
+        btn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+        btn.Text = i .. ". " .. rod.name .. " (" .. rod.location .. ")"
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.TextScaled = true
+        btn.Font = Enum.Font.Gotham
+        btn.BorderSizePixel = 0
+        btn.Parent = RodListFrame
+        btn.MouseButton1Click:Connect(function()
+            SelectRod(i)
+            RodStatus.Text = "🎣 ROD: " .. CurrentRodName
+            RodStatus.TextColor3 = Color3.fromRGB(0, 255, 0)
+            RodListFrame.Visible = false
+        end)
+        y = y + 30
+    end
 end)
 
-ContentY = ContentY + 40
+-- Status Auto Fish
+local AutoFishStatus = Instance.new("TextLabel")
+AutoFishStatus.Size = UDim2.new(0.6, -10, 0, 35)
+AutoFishStatus.Position = UDim2.new(0, 10, 0, 270)
+AutoFishStatus.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+AutoFishStatus.Text = "⚡ AUTO FISH: OFF"
+AutoFishStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+AutoFishStatus.TextScaled = true
+AutoFishStatus.Font = Enum.Font.GothamBold
+AutoFishStatus.Parent = Frame
 
--- BLATANT MODE TOGGLE
+-- Tombol Auto Fish
+local AutoFishBtn = Instance.new("TextButton")
+AutoFishBtn.Size = UDim2.new(0.35, -10, 0, 35)
+AutoFishBtn.Position = UDim2.new(0.65, -5, 0, 270)
+AutoFishBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+AutoFishBtn.Text = "F: OFF"
+AutoFishBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AutoFishBtn.TextScaled = true
+AutoFishBtn.Font = Enum.Font.GothamBold
+AutoFishBtn.BorderSizePixel = 0
+AutoFishBtn.Parent = Frame
+AutoFishBtn.MouseButton1Click:Connect(function()
+    Settings.AutoFish = not Settings.AutoFish
+    AutoFishStatus.Text = Settings.AutoFish and "⚡ AUTO FISH: ON" or "⚡ AUTO FISH: OFF"
+    AutoFishStatus.TextColor3 = Settings.AutoFish and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 100, 100)
+    AutoFishBtn.Text = Settings.AutoFish and "F: ON" or "F: OFF"
+    AutoFishBtn.BackgroundColor3 = Settings.AutoFish and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 50, 50)
+end)
+
+-- Blatant Mode
 local BlatantLabel = Instance.new("TextLabel")
-BlatantLabel.Size = UDim2.new(0.5, -10, 0, 30)
-BlatantLabel.Position = UDim2.new(0, 10, 0, ContentY)
-BlatantLabel.BackgroundTransparency = 1
-BlatantLabel.Text = "⚡ BLATANT MODE: ON"
+BlatantLabel.Size = UDim2.new(0.6, -10, 0, 35)
+BlatantLabel.Position = UDim2.new(0, 10, 0, 315)
+BlatantLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+BlatantLabel.Text = "⚡ BLATANT: ON"
 BlatantLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
 BlatantLabel.TextScaled = true
-BlatantLabel.Font = Enum.Font.GothamBlack
-BlatantLabel.TextXAlignment = Enum.TextXAlignment.Left
-BlatantLabel.Parent = MainFrame
+BlatantLabel.Font = Enum.Font.GothamBold
+BlatantLabel.Parent = Frame
 
 local BlatantBtn = Instance.new("TextButton")
-BlatantBtn.Size = UDim2.new(0, 80, 0, 30)
-BlatantBtn.Position = UDim2.new(0.5, -40, 0, ContentY)
+BlatantBtn.Size = UDim2.new(0.35, -10, 0, 35)
+BlatantBtn.Position = UDim2.new(0.65, -5, 0, 315)
 BlatantBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-BlatantBtn.BackgroundTransparency = 0.3
 BlatantBtn.Text = "B: ON"
 BlatantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 BlatantBtn.TextScaled = true
 BlatantBtn.Font = Enum.Font.GothamBold
 BlatantBtn.BorderSizePixel = 0
-BlatantBtn.Parent = MainFrame
+BlatantBtn.Parent = Frame
 BlatantBtn.MouseButton1Click:Connect(function()
     Settings.BlatantMode = not Settings.BlatantMode
+    BlatantLabel.Text = Settings.BlatantMode and "⚡ BLATANT: ON" or "⚡ BLATANT: OFF"
+    BlatantLabel.TextColor3 = Settings.BlatantMode and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(200, 200, 200)
     BlatantBtn.Text = Settings.BlatantMode and "B: ON" or "B: OFF"
     BlatantBtn.BackgroundColor3 = Settings.BlatantMode and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(100, 100, 100)
-    BlatantLabel.Text = Settings.BlatantMode and "⚡ BLATANT MODE: ON" or "⚡ BLATANT MODE: OFF"
-    BlatantLabel.TextColor3 = Settings.BlatantMode and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(200, 200, 200)
 end)
 
-ContentY = ContentY + 40
+-- Ikan Counter
+local FishLabel = Instance.new("TextLabel")
+FishLabel.Size = UDim2.new(1, -20, 0, 35)
+FishLabel.Position = UDim2.new(0, 10, 0, 360)
+FishLabel.BackgroundColor3 = Color3.fromRGB(0, 50, 50)
+FishLabel.Text = "🐟 IKAN: 0"
+FishLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
+FishLabel.TextScaled = true
+FishLabel.Font = Enum.Font.Gotham
+FishLabel.Parent = Frame
 
--- Teleport shortcuts
-local TeleportLabel = Instance.new("TextLabel")
-TeleportLabel.Size = UDim2.new(1, -20, 0, 25)
-TeleportLabel.Position = UDim2.new(0, 10, 0, ContentY)
-TeleportLabel.BackgroundTransparency = 1
-TeleportLabel.Text = "📍 TELEPORT: 1=Spawn 2=Shop 3=Lava 4=Jungle 5=Ice 6=Pirate 7=Temple 8=Deep"
-TeleportLabel.TextColor3 = Color3.fromRGB(200, 200, 0)
-TeleportLabel.TextScaled = true
-TeleportLabel.Font = Enum.Font.Gotham
-TeleportLabel.TextXAlignment = Enum.TextXAlignment.Left
-TeleportLabel.Parent = MainFrame
+-- Tombol Reset
+local ResetBtn = Instance.new("TextButton")
+ResetBtn.Size = UDim2.new(0.3, -5, 0, 30)
+ResetBtn.Position = UDim2.new(0.7, -5, 0, 365)
+ResetBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
+ResetBtn.Text = "R"
+ResetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ResetBtn.TextScaled = true
+ResetBtn.Font = Enum.Font.GothamBold
+ResetBtn.BorderSizePixel = 0
+ResetBtn.Parent = Frame
+ResetBtn.MouseButton1Click:Connect(function()
+    Settings.FishCount = 0
+    FishLabel.Text = "🐟 IKAN: 0"
+end)
 
-ContentY = ContentY + 30
-
--- Credit
-local CreditLabel = Instance.new("TextLabel")
-CreditLabel.Size = UDim2.new(1, -20, 0, 20)
-CreditLabel.Position = UDim2.new(0, 10, 0, ContentY)
-CreditLabel.BackgroundTransparency = 1
-CreditLabel.Text = "🔥 RioTestting - YOLO BLATANT | F:Auto U:Rod B:Blatant R:Reset"
-CreditLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-CreditLabel.TextScaled = true
-CreditLabel.Font = Enum.Font.GothamLight
-CreditLabel.TextXAlignment = Enum.TextXAlignment.Left
-CreditLabel.Parent = MainFrame
-
--- ========== [11. UPDATE UI LOOP] ==========
+-- Update UI loop
 task.spawn(function()
     while true do
         task.wait(0.3)
-        -- Update status auto fish
-        StatusLabel.Text = Settings.AutoFish and "⚡ AUTO FISH: ON" or "⚡ AUTO FISH: OFF"
-        StatusLabel.TextColor3 = Settings.AutoFish and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 100, 100)
-        FishBtn.Text = Settings.AutoFish and "F: ON" or "F: OFF"
-        FishBtn.BackgroundColor3 = Settings.AutoFish and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(255, 50, 50)
-        
-        -- Update rod status
-        if CastEvent then
-            RodLabel.Text = "🎣 ROD: " .. CurrentRodName .. (RodInHand and " (TANGAN)" or " (TAS)")
-            RodLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-        else
-            RodLabel.Text = "🎣 ROD: TIDAK DITEMUKAN"
-            RodLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-        end
-        
-        -- Update fish count
-        FishCountLabel.Text = "🐟 IKAN: " .. Settings.FishCount
+        FishLabel.Text = "🐟 IKAN: " .. Settings.FishCount
     end
 end)
 
--- ========== [12. KEYBINDS] ==========
+-- ========== [6. KEYBINDS] ==========
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     
-    -- F: TOGGLE AUTO FISH
     if input.KeyCode == Enum.KeyCode.F then
         Settings.AutoFish = not Settings.AutoFish
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "🔥 RioTestting",
-            Text = Settings.AutoFish and "AUTO FISH ON" or "AUTO FISH OFF",
-            Duration = 1
-        })
+        AutoFishStatus.Text = Settings.AutoFish and "⚡ AUTO FISH: ON" or "⚡ AUTO FISH: OFF"
+        AutoFishStatus.TextColor3 = Settings.AutoFish and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 100, 100)
+        AutoFishBtn.Text = Settings.AutoFish and "F: ON" or "F: OFF"
+        AutoFishBtn.BackgroundColor3 = Settings.AutoFish and Color3.fromRGB(0, 200, 0) or Color3.fromRGB(200, 50, 50)
     end
     
-    -- U: UPDATE ROD
-    if input.KeyCode == Enum.KeyCode.U then
-        local found = UpdateRod()
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "🎣 RioTestting",
-            Text = found and "Rod: " .. CurrentRodName or "Rod tidak ditemukan!",
-            Duration = 1.5
-        })
-    end
-    
-    -- B: TOGGLE BLATANT MODE
     if input.KeyCode == Enum.KeyCode.B then
         Settings.BlatantMode = not Settings.BlatantMode
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "⚡ RioTestting",
-            Text = Settings.BlatantMode and "BLATANT MODE ON" or "BLATANT MODE OFF",
-            Duration = 1
-        })
+        BlatantLabel.Text = Settings.BlatantMode and "⚡ BLATANT: ON" or "⚡ BLATANT: OFF"
+        BlatantLabel.TextColor3 = Settings.BlatantMode and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(200, 200, 200)
+        BlatantBtn.Text = Settings.BlatantMode and "B: ON" or "B: OFF"
+        BlatantBtn.BackgroundColor3 = Settings.BlatantMode and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(100, 100, 100)
     end
     
-    -- R: RESET COUNTER
     if input.KeyCode == Enum.KeyCode.R then
         Settings.FishCount = 0
-        Settings.TotalEarnings = 0
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "📊 RioTestting",
-            Text = "Counter direset!",
-            Duration = 1
-        })
+        FishLabel.Text = "🐟 IKAN: 0"
     end
     
-    -- H: TOGGLE SPEED BOOST
-    if input.KeyCode == Enum.KeyCode.H then
-        Settings.SpeedBoost = not Settings.SpeedBoost
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "⚡ RioTestting",
-            Text = Settings.SpeedBoost and "SPEED ON" or "SPEED OFF",
-            Duration = 1
-        })
-    end
-    
-    -- J: TOGGLE AUTO COLLECT
-    if input.KeyCode == Enum.KeyCode.J then
-        Settings.AutoCollect = not Settings.AutoCollect
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "📦 RioTestting",
-            Text = Settings.AutoCollect and "AUTO COLLECT ON" or "AUTO COLLECT OFF",
-            Duration = 1
-        })
-    end
-    
-    -- K: TOGGLE INF JUMP
-    if input.KeyCode == Enum.KeyCode.K then
-        Settings.InfJump = not Settings.InfJump
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "🦘 RioTestting",
-            Text = Settings.InfJump and "INF JUMP ON" or "INF JUMP OFF",
-            Duration = 1
-        })
+    if input.KeyCode == Enum.KeyCode.U then
+        local found = RefreshRod()
+        if found then
+            RodStatus.Text = "🎣 ROD: " .. CurrentRodName
+            RodStatus.TextColor3 = Color3.fromRGB(0, 255, 0)
+        else
+            RodStatus.Text = "🎣 ROD: TIDAK DITEMUKAN"
+            RodStatus.TextColor3 = Color3.fromRGB(255, 0, 0)
+        end
     end
 end)
 
--- ========== [13. TELEPORT KEYBINDS] ==========
-local TeleportLocs = {
+-- ========== [7. TELEPORT SEDERHANA] ==========
+local TeleportSpots = {
     [Enum.KeyCode.One] = CFrame.new(0, 10, 0),
     [Enum.KeyCode.Two] = CFrame.new(50, 10, 50),
     [Enum.KeyCode.Three] = CFrame.new(200, 30, -150),
-    [Enum.KeyCode.Four] = CFrame.new(-100, 20, 300),
-    [Enum.KeyCode.Five] = CFrame.new(400, 50, 400),
-    [Enum.KeyCode.Six] = CFrame.new(-200, 15, 250),
-    [Enum.KeyCode.Seven] = CFrame.new(300, 40, -200),
-    [Enum.KeyCode.Eight] = CFrame.new(500, 20, 500),
 }
 
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
-    local cf = TeleportLocs[input.KeyCode]
+    local cf = TeleportSpots[input.KeyCode]
     if cf and Player.Character and Player.Character.HumanoidRootPart then
         Player.Character.HumanoidRootPart.CFrame = cf
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "📍 RioTestting",
-            Text = "Teleport!",
-            Duration = 0.8
-        })
     end
 end)
 
--- ========== [14. NOTIFIKASI START] ==========
+-- ========== [8. NOTIFIKASI] ==========
 game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "🔥 RIOTESTTING - FINAL",
-    Text = "Tekan U cek rod, F auto fish, B blatant!",
+    Title = "🔥 RIOTESTTING - DIAGNOSTIK",
+    Text = "Cek console (F9) untuk debug rod!",
     Duration = 5
 })
 
-print("==========================================")
-print("🔥 RIOTESTTING - BLATANT FISH IT! (FULL GUI)")
-print("✅ DETEKSI ROD DI TANGAN + TAS")
-print("✅ BLATANT MODE TOGGLE (B)")
-print("✅ UI DRAGGABLE + KEYBIND LENGKAP")
-print("✅ ROD DEFAULT: Starter Rod (bukan Fishing Rod!)")
-print("==========================================")
+print("========== RIOTESTTING READY ==========")
+print("✅ UI sudah muncul, cek rod di layar.")
+print("🎣 Jika rod tidak terdeteksi, tekan REFRESH atau pilih manual.")
+print("📢 LAPORKAN KE SAYA: Apakah rod muncul di console? Ada CastEvent?")
