@@ -1,9 +1,9 @@
 --[[
-    🔥 RIOTESTTING - FISH IT! DIAGNOSTIK EDITION
-    ✅ FORCE DETEKSI ROD - CARI APAPUN YANG PUNYA CASTEVENT
-    ✅ DEBUG LENGKAP - LIHAT DI CONSOLE
-    ✅ UI SEDERHANA - TOMBOL MANUAL
-    ✅ TANPA ASUMSI NAMA ROD - DETEKSI OTOMATIS
+    🔥 RIOTESTTING - FISH IT! DIAGNOSTIK FIX
+    ✅ ERROR "MouseButton1Click is not a valid member of TextLabel" FIXED
+    ✅ DETEKSI ROD LEBIH AGRESIF
+    ✅ UI SEMUA PAKAI TEXTBUTTON
+    ✅ TAMPILKAN INSTRUKSI JIKA ROD TIDAK ADA
 ]]
 
 -- ========== [1. INISIALISASI] ==========
@@ -15,19 +15,22 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 
--- ========== [2. DEBUG MODE - LIHAT SEMUA] ==========
-print("========== RIOTESTTING DIAGNOSTIK ==========")
+-- ========== [2. DEBUG CONSOLE] ==========
+print("========== RIOTESTTING DIAGNOSTIK FIX ==========")
 print("🔍 Mencari tool dengan CastEvent...")
 
--- ========== [3. DETEKSI ROD UNIVERSAL] ==========
+-- ========== [3. DETEKSI ROD SUPER AGRESIF] ==========
 local function FindAnyCastEvent()
     local results = {}
     
-    -- CEK CHARACTER (TANGAN)
+    -- CEK CHARACTER (TANGAN) - SEMUA TOOL
     if Player.Character then
         for _, item in ipairs(Player.Character:GetChildren()) do
             if item:IsA("Tool") then
-                local cast = item:FindFirstChild("CastEvent")
+                local cast = item:FindFirstChild("CastEvent") or 
+                            item:FindFirstChild("Cast") or 
+                            item:FindFirstChild("Fish") or
+                            item:FindFirstChildWhichIsA("RemoteEvent")
                 if cast then
                     table.insert(results, {
                         item = item,
@@ -43,7 +46,10 @@ local function FindAnyCastEvent()
     -- CEK BACKPACK (TAS)
     for _, item in ipairs(Player.Backpack:GetChildren()) do
         if item:IsA("Tool") then
-            local cast = item:FindFirstChild("CastEvent")
+            local cast = item:FindFirstChild("CastEvent") or 
+                        item:FindFirstChild("Cast") or 
+                        item:FindFirstChild("Fish") or
+                        item:FindFirstChildWhichIsA("RemoteEvent")
             if cast then
                 table.insert(results, {
                     item = item,
@@ -55,16 +61,34 @@ local function FindAnyCastEvent()
         end
     end
     
+    -- CEK SEMUA DESCENDANTS PLAYER (FALLBACK)
+    for _, item in ipairs(Player:GetDescendants()) do
+        if item:IsA("Tool") and not table.find(results, item) then
+            local cast = item:FindFirstChild("CastEvent") or 
+                        item:FindFirstChild("Cast") or 
+                        item:FindFirstChild("Fish") or
+                        item:FindFirstChildWhichIsA("RemoteEvent")
+            if cast then
+                table.insert(results, {
+                    item = item,
+                    cast = cast,
+                    location = "Lainnya",
+                    name = item.Name
+                })
+            end
+        end
+    end
+    
     return results
 end
 
 local detectedRods = FindAnyCastEvent()
-print("🎣 Ditemukan " .. #detectedRods .. " tool dengan CastEvent:")
+print("🎣 Ditemukan " .. #detectedRods .. " tool dengan CastEvent/RemoteEvent:")
 for i, rod in ipairs(detectedRods) do
     print("   " .. i .. ". " .. rod.name .. " (" .. rod.location .. ")")
 end
 
--- Pilih rod pertama yang ditemukan, atau nil
+-- Pilih rod pertama jika ada
 local CurrentRod = nil
 local CastEvent = nil
 local CurrentRodName = "Tidak Ada"
@@ -76,7 +100,9 @@ if #detectedRods > 0 then
     print("✅ Menggunakan: " .. CurrentRodName)
 else
     print("❌ TIDAK ADA TOOL DENGAN CASTEVENT!")
-    print("   Pastikan kamu sudah membeli dan memegang Fishing Rod.")
+    print("   ➤ Pastikan kamu sudah MEMBELI dan MEMEGANG Fishing Rod.")
+    print("   ➤ Jika sudah, coba EQUIP rod ke tangan.")
+    print("   ➤ Nama rod yang umum: Starter Rod, Luck Rod, Carbon Rod, dll.")
 end
 
 -- Fungsi manual pilih rod
@@ -143,15 +169,15 @@ task.spawn(function()
     end
 end)
 
--- ========== [5. UI SUPER SEDERHANA - PASTI WORK] ==========
+-- ========== [5. UI FIX - SEMUA TEXTBUTTON] ==========
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "RioTestting_Diagnostic"
-ScreenGui.Parent = Player.PlayerGui or game.CoreGui
+ScreenGui.Name = "RioTestting_Fix"
+ScreenGui.Parent = Player.PlayerGui or game:GetService("CoreGui")
 
 -- Frame utama
 local Frame = Instance.new("Frame")
-Frame.Size = UDim2.new(0, 350, 0, 400)
-Frame.Position = UDim2.new(0.5, -175, 0.5, -200)
+Frame.Size = UDim2.new(0, 380, 0, 500)
+Frame.Position = UDim2.new(0.5, -190, 0.5, -250)
 Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
 Frame.BorderSizePixel = 2
 Frame.BorderColor3 = Color3.fromRGB(255, 50, 50)
@@ -161,9 +187,9 @@ Frame.Parent = ScreenGui
 
 -- Judul
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
-Title.Text = "🔥 RIOTESTTING - DIAGNOSTIK"
+Title.Text = "🔥 RIOTESTTING - DIAGNOSTIK FIX"
 Title.TextColor3 = Color3.fromRGB(255, 100, 100)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBlack
@@ -171,8 +197,8 @@ Title.Parent = Frame
 
 -- Status Rod
 local RodStatus = Instance.new("TextLabel")
-RodStatus.Size = UDim2.new(1, -20, 0, 40)
-RodStatus.Position = UDim2.new(0, 10, 0, 45)
+RodStatus.Size = UDim2.new(1, -20, 0, 45)
+RodStatus.Position = UDim2.new(0, 10, 0, 50)
 RodStatus.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 RodStatus.BackgroundTransparency = 0.5
 RodStatus.Text = "🎣 ROD: " .. CurrentRodName
@@ -181,12 +207,12 @@ RodStatus.TextScaled = true
 RodStatus.Font = Enum.Font.Gotham
 RodStatus.Parent = Frame
 
--- Tombol Refresh Rod
+-- Tombol Refresh Rod (TEXTBUTTON)
 local RefreshBtn = Instance.new("TextButton")
-RefreshBtn.Size = UDim2.new(0.5, -15, 0, 35)
-RefreshBtn.Position = UDim2.new(0, 10, 0, 95)
+RefreshBtn.Size = UDim2.new(0.45, -10, 0, 40)
+RefreshBtn.Position = UDim2.new(0, 10, 0, 105)
 RefreshBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 200)
-RefreshBtn.Text = "🔄 REFRESH ROD"
+RefreshBtn.Text = "🔄 REFRESH ROD (U)"
 RefreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 RefreshBtn.TextScaled = true
 RefreshBtn.Font = Enum.Font.GothamBold
@@ -203,37 +229,39 @@ RefreshBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Tombol Pilih Rod Manual
-local ManualLabel = Instance.new("TextLabel")
-ManualLabel.Size = UDim2.new(0.5, -15, 0, 35)
-ManualLabel.Position = UDim2.new(0.5, 5, 0, 95)
-ManualLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-ManualLabel.Text = "📋 PILIH ROD"
-ManualLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-ManualLabel.TextScaled = true
-ManualLabel.Font = Enum.Font.Gotham
-ManualLabel.Parent = Frame
+-- Tombol Pilih Rod Manual (TEXTBUTTON)
+local SelectRodBtn = Instance.new("TextButton")
+SelectRodBtn.Size = UDim2.new(0.45, -10, 0, 40)
+SelectRodBtn.Position = UDim2.new(0.55, -5, 0, 105)
+SelectRodBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 50)
+SelectRodBtn.Text = "📋 PILIH ROD"
+SelectRodBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SelectRodBtn.TextScaled = true
+SelectRodBtn.Font = Enum.Font.GothamBold
+SelectRodBtn.BorderSizePixel = 0
+SelectRodBtn.Parent = Frame
 
--- Dropdown sederhana (pakai tombol-tombol)
+-- Frame untuk daftar rod (muncul saat tombol Pilih diklik)
 local RodListFrame = Instance.new("Frame")
-RodListFrame.Size = UDim2.new(1, -20, 0, 120)
-RodListFrame.Position = UDim2.new(0, 10, 0, 140)
+RodListFrame.Size = UDim2.new(1, -20, 0, 150)
+RodListFrame.Position = UDim2.new(0, 10, 0, 155)
 RodListFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 RodListFrame.BorderSizePixel = 1
 RodListFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
 RodListFrame.Visible = false
 RodListFrame.Parent = Frame
 
-ManualLabel.MouseButton1Click:Connect(function()
+SelectRodBtn.MouseButton1Click:Connect(function()
     RodListFrame.Visible = not RodListFrame.Visible
-    -- Update daftar rod
+    -- Bersihkan isi lama
     for _, v in ipairs(RodListFrame:GetChildren()) do
         if v:IsA("TextButton") then v:Destroy() end
     end
+    -- Isi dengan daftar rod terkini
     local y = 5
     for i, rod in ipairs(detectedRods) do
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -10, 0, 25)
+        btn.Size = UDim2.new(1, -10, 0, 30)
         btn.Position = UDim2.new(0, 5, 0, y)
         btn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
         btn.Text = i .. ". " .. rod.name .. " (" .. rod.location .. ")"
@@ -248,14 +276,27 @@ ManualLabel.MouseButton1Click:Connect(function()
             RodStatus.TextColor3 = Color3.fromRGB(0, 255, 0)
             RodListFrame.Visible = false
         end)
-        y = y + 30
+        y = y + 35
     end
 end)
 
--- Status Auto Fish
+-- INSTRUKSI JIKA TIDAK ADA ROD
+local WarningLabel = Instance.new("TextLabel")
+WarningLabel.Size = UDim2.new(1, -20, 0, 40)
+WarningLabel.Position = UDim2.new(0, 10, 0, 210)
+WarningLabel.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
+WarningLabel.BackgroundTransparency = 0.3
+WarningLabel.Text = "⚠️ TIDAK ADA ROD TERDETEKSI! ⚠️\nBeli rod di shop, lalu equip!"
+WarningLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+WarningLabel.TextScaled = true
+WarningLabel.Font = Enum.Font.GothamBold
+WarningLabel.Visible = (#detectedRods == 0)
+WarningLabel.Parent = Frame
+
+-- Auto Fish Status
 local AutoFishStatus = Instance.new("TextLabel")
-AutoFishStatus.Size = UDim2.new(0.6, -10, 0, 35)
-AutoFishStatus.Position = UDim2.new(0, 10, 0, 270)
+AutoFishStatus.Size = UDim2.new(0.6, -10, 0, 40)
+AutoFishStatus.Position = UDim2.new(0, 10, 0, 260)
 AutoFishStatus.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 AutoFishStatus.Text = "⚡ AUTO FISH: OFF"
 AutoFishStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
@@ -263,10 +304,10 @@ AutoFishStatus.TextScaled = true
 AutoFishStatus.Font = Enum.Font.GothamBold
 AutoFishStatus.Parent = Frame
 
--- Tombol Auto Fish
+-- Tombol Auto Fish (TEXTBUTTON)
 local AutoFishBtn = Instance.new("TextButton")
-AutoFishBtn.Size = UDim2.new(0.35, -10, 0, 35)
-AutoFishBtn.Position = UDim2.new(0.65, -5, 0, 270)
+AutoFishBtn.Size = UDim2.new(0.35, -10, 0, 40)
+AutoFishBtn.Position = UDim2.new(0.65, -5, 0, 260)
 AutoFishBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 AutoFishBtn.Text = "F: OFF"
 AutoFishBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -284,8 +325,8 @@ end)
 
 -- Blatant Mode
 local BlatantLabel = Instance.new("TextLabel")
-BlatantLabel.Size = UDim2.new(0.6, -10, 0, 35)
-BlatantLabel.Position = UDim2.new(0, 10, 0, 315)
+BlatantLabel.Size = UDim2.new(0.6, -10, 0, 40)
+BlatantLabel.Position = UDim2.new(0, 10, 0, 310)
 BlatantLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 BlatantLabel.Text = "⚡ BLATANT: ON"
 BlatantLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
@@ -293,9 +334,10 @@ BlatantLabel.TextScaled = true
 BlatantLabel.Font = Enum.Font.GothamBold
 BlatantLabel.Parent = Frame
 
+-- Tombol Blatant (TEXTBUTTON)
 local BlatantBtn = Instance.new("TextButton")
-BlatantBtn.Size = UDim2.new(0.35, -10, 0, 35)
-BlatantBtn.Position = UDim2.new(0.65, -5, 0, 315)
+BlatantBtn.Size = UDim2.new(0.35, -10, 0, 40)
+BlatantBtn.Position = UDim2.new(0.65, -5, 0, 310)
 BlatantBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 BlatantBtn.Text = "B: ON"
 BlatantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -313,7 +355,7 @@ end)
 
 -- Ikan Counter
 local FishLabel = Instance.new("TextLabel")
-FishLabel.Size = UDim2.new(1, -20, 0, 35)
+FishLabel.Size = UDim2.new(0.7, -10, 0, 40)
 FishLabel.Position = UDim2.new(0, 10, 0, 360)
 FishLabel.BackgroundColor3 = Color3.fromRGB(0, 50, 50)
 FishLabel.Text = "🐟 IKAN: 0"
@@ -322,10 +364,10 @@ FishLabel.TextScaled = true
 FishLabel.Font = Enum.Font.Gotham
 FishLabel.Parent = Frame
 
--- Tombol Reset
+-- Tombol Reset (TEXTBUTTON)
 local ResetBtn = Instance.new("TextButton")
-ResetBtn.Size = UDim2.new(0.3, -5, 0, 30)
-ResetBtn.Position = UDim2.new(0.7, -5, 0, 365)
+ResetBtn.Size = UDim2.new(0.25, -10, 0, 40)
+ResetBtn.Position = UDim2.new(0.75, -5, 0, 360)
 ResetBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 0)
 ResetBtn.Text = "R"
 ResetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -338,11 +380,24 @@ ResetBtn.MouseButton1Click:Connect(function()
     FishLabel.Text = "🐟 IKAN: 0"
 end)
 
+-- Credit
+local CreditLabel = Instance.new("TextLabel")
+CreditLabel.Size = UDim2.new(1, -20, 0, 25)
+CreditLabel.Position = UDim2.new(0, 10, 0, 415)
+CreditLabel.BackgroundTransparency = 1
+CreditLabel.Text = "🔥 RioTestting | F:Auto U:Rod B:Blatant R:Reset"
+CreditLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+CreditLabel.TextScaled = true
+CreditLabel.Font = Enum.Font.GothamLight
+CreditLabel.Parent = Frame
+
 -- Update UI loop
 task.spawn(function()
     while true do
         task.wait(0.3)
         FishLabel.Text = "🐟 IKAN: " .. Settings.FishCount
+        -- Update peringatan rod
+        WarningLabel.Visible = (#detectedRods == 0)
     end
 end)
 
@@ -388,6 +443,8 @@ local TeleportSpots = {
     [Enum.KeyCode.One] = CFrame.new(0, 10, 0),
     [Enum.KeyCode.Two] = CFrame.new(50, 10, 50),
     [Enum.KeyCode.Three] = CFrame.new(200, 30, -150),
+    [Enum.KeyCode.Four] = CFrame.new(-100, 20, 300),
+    [Enum.KeyCode.Five] = CFrame.new(400, 50, 400),
 }
 
 UserInputService.InputBegan:Connect(function(input, gp)
@@ -400,12 +457,13 @@ end)
 
 -- ========== [8. NOTIFIKASI] ==========
 game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "🔥 RIOTESTTING - DIAGNOSTIK",
-    Text = "Cek console (F9) untuk debug rod!",
+    Title = "🔥 RIOTESTTING - FIX",
+    Text = "Error MouseButton1Click diperbaiki!",
     Duration = 5
 })
 
-print("========== RIOTESTTING READY ==========")
-print("✅ UI sudah muncul, cek rod di layar.")
-print("🎣 Jika rod tidak terdeteksi, tekan REFRESH atau pilih manual.")
-print("📢 LAPORKAN KE SAYA: Apakah rod muncul di console? Ada CastEvent?")
+print("========== RIOTESTTING FIX READY ==========")
+print("✅ Error 'MouseButton1Click' sudah diperbaiki.")
+print("🎣 Jika rod tidak terdeteksi, beli dan equip rod dulu!")
+print("🔄 Tekan U atau tombol REFRESH untuk cek ulang.")
+print("📢 LAPORAN: Apakah sekarang rod terdeteksi?")
