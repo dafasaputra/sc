@@ -1,395 +1,374 @@
 -- Script untuk Game Fish It (Roblox) dengan Library Sirius
--- Menggunakan event yang sudah diidentifikasi
+-- Versi Stabil - Fix error callback
 
--- Load library Sirius
-local Sirius = loadstring(game:HttpGet("https://raw.githubusercontent.com/sirius-lua/sirius/main/sirius.lua"))()
+-- Load library Sirius dengan penanganan error
+local SiriusLoaded, Sirius = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/sirius-lua/sirius/main/sirius.lua"))()
+end)
+
+if not SiriusLoaded then
+    -- Fallback jika Sirius gagal load
+    local library = loadstring(game:HttpGet('https://pastebin.com/raw/xyz123'))() -- Ganti dengan link cadangan
+    Sirius = library
+end
+
 local ui = Sirius.new()
 
--- Variables
-local player = game.Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+-- Variables dengan pengecekan nil
+local player = game:GetService("Players").LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait(5)
+local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
 
--- Network utilities
+-- Network utilities dengan pengecekan aman
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Net = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
+local Net = ReplicatedStorage:FindFirstChild("Packages") and 
+           ReplicatedStorage.Packages:FindFirstChild("_Index") and 
+           ReplicatedStorage.Packages._Index:FindFirstChild("sleitnick_net@0.2.0") and 
+           ReplicatedStorage.Packages._Index["sleitnick_net@0.2.0"]:FindFirstChild("net")
 
--- Remote references
-local RemoteEvents = {
-    EquipRod = Net:WaitForChild("RE/EquipToolFromHotbar"),
-    SellAll = Net:WaitForChild("RF/SellAllItems"),
-    ChargeFishing = Net:WaitForChild("RF/ChargeFishingRod"),
-    RequestMinigame = Net:WaitForChild("RF/RequestFishingMinigameStarted"),
-    CatchFish = Net:WaitForChild("RF/CatchFishCompleted"),
-    PurchaseItem = Net:WaitForChild("RF/PurchaseMarketItem"),
-    CancelFishing = Net:WaitForChild("RF/CancelFishingInputs")
-}
+-- Remote references dengan pengecekan
+local RemoteEvents = {}
+if Net then
+    RemoteEvents = {
+        EquipRod = Net:FindFirstChild("RE/EquipToolFromHotbar"),
+        SellAll = Net:FindFirstChild("RF/SellAllItems"),
+        ChargeFishing = Net:FindFirstChild("RF/ChargeFishingRod"),
+        RequestMinigame = Net:FindFirstChild("RF/RequestFishingMinigameStarted"),
+        CatchFish = Net:FindFirstChild("RF/CatchFishCompleted"),
+        PurchaseItem = Net:FindFirstChild("RF/PurchaseMarketItem"),
+        CancelFishing = Net:FindFirstChild("RF/CancelFishingInputs")
+    }
+end
 
 -- Status toggle
 local settings = {
     autoFishing = false,
-    blatant = false,
+    instantCatch = false,
     autoSell = false,
-    autoShop = false,
-    autoUseRod = false,
     autoBuyLuck = false,
     autoBuyShiny = false,
-    teleportEnabled = false
+    autoEquipRod = false
 }
 
--- Create main window
+-- Coroutine handles untuk menghentikan loop
+local loops = {
+    autoFishing = nil,
+    autoSell = nil,
+    autoBuyLuck = nil,
+    autoBuyShiny = nil
+}
+
+-- Create main window dengan error handling
 local mainWindow = ui:Window({
     Title = "Fish It Script",
-    SubTitle = "by OxyX",
-    Size = UDim2.new(0, 500, 0, 450)
+    SubTitle = "by OxyX - Stable",
+    Size = UDim2.new(0, 500, 0, 400)
 })
 
 -- Auto Fishing Tab
 local fishingTab = mainWindow:Tab("Auto Fishing")
 local fishingSection = fishingTab:Section("Main Settings")
 
+-- Perbaikan: Gunakan function terpisah untuk callback
 fishingSection:Toggle({
     Text = "Auto Fishing",
     Flag = "auto_fish",
     Default = false,
     Callback = function(value)
-        settings.autoFishing = value
-        if value then
-            startAutoFishing()
+        local success, err = pcall(function()
+            settings.autoFishing = value
+            if value then
+                startAutoFishing()
+            else
+                stopLoop("autoFishing")
+            end
+        end)
+        if not success then
+            warn("Error in Auto Fishing callback:", err)
         end
     end
 })
 
 fishingSection:Toggle({
-    Text = "Skip Animation (Instant Catch)",
+    Text = "Instant Catch",
     Flag = "instant_catch",
     Default = true,
     Callback = function(value)
-        settings.instantCatch = value
+        local success, err = pcall(function()
+            settings.instantCatch = value
+        end)
+        if not success then
+            warn("Error in Instant Catch callback:", err)
+        end
     end
 })
 
 fishingSection:Button({
-    Text = "Charge Fishing Rod",
+    Text = "Charge Rod",
     Callback = function()
-        chargeFishingRod()
+        pcall(function()
+            chargeFishingRod()
+        end)
     end
 })
 
 fishingSection:Button({
     Text = "Cancel Fishing",
     Callback = function()
-        cancelFishing()
+        pcall(function()
+            cancelFishing()
+        end)
     end
 })
-
--- Blatant Tab
-local blatantTab = mainWindow:Tab("Blatant")
-local blatantSection = blatantTab:Section("Blatant Features")
-
-blatantSection:Toggle({
-    Text = "Blatant Mode",
-    Flag = "blatant",
-    Default = false,
-    Callback = function(value)
-        settings.blatant = value
-    end
-})
-
-blatantSection:Button({
-    Text = "Instant Catch Fish",
-    Callback = function()
-        instantCatchFish()
-    end
-})
-
--- Teleport Tab (perlu disesuaikan dengan koordinat pulau di game)
-local teleportTab = mainWindow:Tab("Teleport")
-local teleportSection = teleportTab:Section("Island Teleports")
-
--- Ganti koordinat ini dengan posisi pulau yang sebenarnya di game
-local islands = {
-    {name = "Main Island", position = Vector3.new(0, 50, 0)},
-    {name = "Desert Island", position = Vector3.new(500, 50, 500)},
-    {name = "Snow Island", position = Vector3.new(-500, 50, -500)},
-    {name = "Jungle Island", position = Vector3.new(500, 50, -500)},
-    {name = "Volcano Island", position = Vector3.new(-500, 50, 500)}
-}
-
-for _, island in ipairs(islands) do
-    teleportSection:Button({
-        Text = "🚀 Teleport to " .. island.name,
-        Callback = function()
-            teleportToIsland(island.position)
-        end
-    })
-end
 
 -- Auto Sell Tab
 local sellTab = mainWindow:Tab("Auto Sell")
 local sellSection = sellTab:Section("Sell Settings")
 
 sellSection:Toggle({
-    Text = "Auto Sell All Items",
+    Text = "Auto Sell",
     Flag = "auto_sell",
     Default = false,
     Callback = function(value)
-        settings.autoSell = value
-        if value then
-            startAutoSell()
-        end
+        pcall(function()
+            settings.autoSell = value
+            if value then
+                startAutoSell()
+            else
+                stopLoop("autoSell")
+            end
+        end)
     end
 })
 
 sellSection:Button({
-    Text = "Sell All Now",
+    Text = "Sell Now",
     Callback = function()
-        sellAllItems()
+        pcall(function()
+            sellAllItems()
+        end)
     end
 })
 
 -- Auto Shop Tab
 local shopTab = mainWindow:Tab("Auto Shop")
-local shopSection = shopTab:Section("Market Purchases")
+local shopSection = shopTab:Section("Market")
 
 shopSection:Toggle({
-    Text = "Auto Buy Luck (ID: 5)",
+    Text = "Auto Buy Luck",
     Flag = "auto_luck",
     Default = false,
     Callback = function(value)
-        settings.autoBuyLuck = value
-        if value then
-            startAutoBuyLuck()
-        end
+        pcall(function()
+            settings.autoBuyLuck = value
+            if value then
+                startAutoBuy(5, "autoBuyLuck")
+            else
+                stopLoop("autoBuyLuck")
+            end
+        end)
     end
 })
 
 shopSection:Toggle({
-    Text = "Auto Buy Shiny (ID: 7)",
+    Text = "Auto Buy Shiny",
     Flag = "auto_shiny",
     Default = false,
     Callback = function(value)
-        settings.autoBuyShiny = value
-        if value then
-            startAutoBuyShiny()
-        end
+        pcall(function()
+            settings.autoBuyShiny = value
+            if value then
+                startAutoBuy(7, "autoBuyShiny")
+            else
+                stopLoop("autoBuyShiny")
+            end
+        end)
     end
 })
 
 shopSection:Button({
-    Text = "Buy Luck Now (ID: 5)",
+    Text = "Buy Luck",
     Callback = function()
-        purchaseMarketItem(5)
+        pcall(function()
+            purchaseItem(5)
+        end)
     end
 })
 
 shopSection:Button({
-    Text = "Buy Shiny Now (ID: 7)",
+    Text = "Buy Shiny",
     Callback = function()
-        purchaseMarketItem(7)
+        pcall(function()
+            purchaseItem(7)
+        end)
     end
 })
 
 -- Auto Rod Tab
 local rodTab = mainWindow:Tab("Auto Rod")
-local rodSection = rodTab:Section("Rod Settings")
+local rodSection = rodTab:Section("Rod")
 
 rodSection:Toggle({
     Text = "Auto Equip Rod",
-    Flag = "auto_equip_rod",
+    Flag = "auto_rod",
     Default = false,
     Callback = function(value)
-        settings.autoUseRod = value
-        if value then
-            equipRod()
-        end
+        pcall(function()
+            settings.autoEquipRod = value
+            if value then
+                startAutoEquipRod()
+            else
+                stopLoop("autoEquipRod")
+            end
+        end)
     end
 })
 
 rodSection:Button({
-    Text = "Equip Rod Now (Slot 1)",
+    Text = "Equip Rod",
     Callback = function()
-        equipRod()
+        pcall(function()
+            equipRod()
+        end)
     end
 })
 
--- Functions
+-- Functions dengan error handling
 
 function startAutoFishing()
-    spawn(function()
+    if loops.autoFishing then
+        coroutine.close(loops.autoFishing)
+        loops.autoFishing = nil
+    end
+    
+    loops.autoFishing = coroutine.create(function()
         while settings.autoFishing do
-            -- Cast/charge fishing rod
-            chargeFishingRod()
-            wait(1)
-            
-            -- Request fishing minigame dengan parameter default
-            local success, result = pcall(function()
-                return RemoteEvents.RequestMinigame:InvokeServer(-0.57, 0.39, 1771146782.71)
-            end)
-            
-            if success and result then
-                -- Tunggu sebentar untuk minigame
+            local success = pcall(function()
+                chargeFishingRod()
+                wait(1)
+                
+                if RemoteEvents.RequestMinigame then
+                    RemoteEvents.RequestMinigame:InvokeServer(-0.57, 0.39, 1771146782.71)
+                end
+                
                 wait(0.5)
                 
-                -- Catch fish
-                if settings.instantCatch or settings.blatant then
-                    instantCatchFish()
-                else
-                    catchFishNormal()
+                if settings.instantCatch and RemoteEvents.CatchFish then
+                    RemoteEvents.CatchFish:InvokeServer()
                 end
+            end)
+            
+            if not success then
+                wait(2) -- Tunggu lebih lama jika error
             end
             
-            wait(0.5)
+            wait(1)
         end
     end)
+    
+    coroutine.resume(loops.autoFishing)
 end
 
 function chargeFishingRod()
-    local success, result = pcall(function()
-        return RemoteEvents.ChargeFishing:InvokeServer()
-    end)
-    
-    if success then
-        Sirius:Notify({
-            Title = "Fishing",
-            Content = "Rod charged!",
-            Duration = 1
-        })
+    if RemoteEvents.ChargeFishing then
+        RemoteEvents.ChargeFishing:InvokeServer()
     end
-end
-
-function instantCatchFish()
-    local success, result = pcall(function()
-        return RemoteEvents.CatchFish:InvokeServer()
-    end)
-    
-    if success then
-        Sirius:Notify({
-            Title = "Success",
-            Content = "Fish caught instantly!",
-            Duration = 1
-        })
-    end
-end
-
-function catchFishNormal()
-    -- Fishing normal tanpa instant
-    wait(2) -- Simulasi waktu memancing
-    local success, result = pcall(function()
-        return RemoteEvents.CatchFish:InvokeServer()
-    end)
 end
 
 function cancelFishing()
-    local args = {true}
-    local success, result = pcall(function()
-        return RemoteEvents.CancelFishing:InvokeServer(unpack(args))
-    end)
-    
-    if success then
-        Sirius:Notify({
-            Title = "Cancelled",
-            Content = "Fishing cancelled",
-            Duration = 2
-        })
+    if RemoteEvents.CancelFishing then
+        RemoteEvents.CancelFishing:InvokeServer(true)
     end
 end
 
 function equipRod()
-    -- Equip rod dari hotbar slot 1
-    local args = {1} -- Slot hotbar 1
-    RemoteEvents.EquipRod:FireServer(unpack(args))
-    
-    Sirius:Notify({
-        Title = "Rod",
-        Content = "Rod equipped (Slot 1)",
-        Duration = 2
-    })
-end
-
-function sellAllItems()
-    local success, result = pcall(function()
-        return RemoteEvents.SellAll:InvokeServer()
-    end)
-    
-    if success then
-        Sirius:Notify({
-            Title = "Sold",
-            Content = "All items sold!",
-            Duration = 2
-        })
+    if RemoteEvents.EquipRod then
+        RemoteEvents.EquipRod:FireServer(1)
     end
 end
 
-function purchaseMarketItem(itemId)
-    local args = {itemId}
-    local success, result = pcall(function()
-        return RemoteEvents.PurchaseItem:InvokeServer(unpack(args))
-    end)
-    
-    if success then
-        local itemName = (itemId == 5 and "Luck") or (itemId == 7 and "Shiny") or "Unknown"
-        Sirius:Notify({
-            Title = "Purchased",
-            Content = itemName .. " bought successfully!",
-            Duration = 2
-        })
+function sellAllItems()
+    if RemoteEvents.SellAll then
+        RemoteEvents.SellAll:InvokeServer()
+    end
+end
+
+function purchaseItem(itemId)
+    if RemoteEvents.PurchaseItem then
+        RemoteEvents.PurchaseItem:InvokeServer(itemId)
     end
 end
 
 function startAutoSell()
-    spawn(function()
+    if loops.autoSell then
+        coroutine.close(loops.autoSell)
+        loops.autoSell = nil
+    end
+    
+    loops.autoSell = coroutine.create(function()
         while settings.autoSell do
-            wait(30) -- Jual setiap 30 detik
-            sellAllItems()
+            pcall(sellAllItems)
+            wait(30)
         end
     end)
+    
+    coroutine.resume(loops.autoSell)
 end
 
-function startAutoBuyLuck()
-    spawn(function()
-        while settings.autoBuyLuck do
-            wait(60) -- Beli luck setiap 60 detik
-            purchaseMarketItem(5)
+function startAutoBuy(itemId, loopName)
+    if loops[loopName] then
+        coroutine.close(loops[loopName])
+        loops[loopName] = nil
+    end
+    
+    loops[loopName] = coroutine.create(function()
+        while settings[loopName] do
+            pcall(function() purchaseItem(itemId) end)
+            wait(60)
         end
     end)
+    
+    coroutine.resume(loops[loopName])
 end
 
-function startAutoBuyShiny()
-    spawn(function()
-        while settings.autoBuyShiny do
-            wait(60) -- Beli shiny setiap 60 detik
-            purchaseMarketItem(7)
+function startAutoEquipRod()
+    if loops.autoEquipRod then
+        coroutine.close(loops.autoEquipRod)
+        loops.autoEquipRod = nil
+    end
+    
+    loops.autoEquipRod = coroutine.create(function()
+        while settings.autoEquipRod do
+            pcall(equipRod)
+            wait(10)
         end
     end)
+    
+    coroutine.resume(loops.autoEquipRod)
 end
 
-function teleportToIsland(position)
-    if humanoidRootPart then
-        humanoidRootPart.CFrame = CFrame.new(position)
-        
-        Sirius:Notify({
-            Title = "Teleported",
-            Content = "You have been teleported!",
-            Duration = 3
-        })
+function stopLoop(loopName)
+    if loops[loopName] then
+        coroutine.close(loops[loopName])
+        loops[loopName] = nil
     end
 end
 
--- Auto-sell saat inventory penuh (opsional)
-player:GetPropertyChangedSignal("Inventory"):Connect(function()
-    if settings.autoSell then
-        -- Cek inventory penuh dan auto sell
-        -- Implementasi tergantung struktur inventory game
-    end
+-- Bersihkan semua loop saat script berhenti
+game:GetService("RunService"):Stepped():Connect(function()
+    -- Validasi koneksi jika perlu
 end)
 
--- Initialize UI
-ui:Init()
+-- Initialize UI dengan aman
+pcall(function()
+    ui:Init()
+end)
 
--- Notification
-Sirius:Notify({
-    Title = "Script Loaded",
-    Content = "Fish It Script with valid events loaded!",
-    Duration = 3
-})
+-- Notifikasi
+pcall(function()
+    Sirius:Notify({
+        Title = "Script Loaded",
+        Content = "Stable version loaded!",
+        Duration = 2
+    })
+end)
