@@ -1,363 +1,163 @@
--- AUTO FISH SCRIPT WITH 429 ERROR HANDLING
-local Player = game.Players.LocalPlayer
+-- SCRIPT AUTO FISH PALING SEDERHANA
+-- TANPA ERROR "attempt to call nil value"
+
+local Player = game:GetService("Players").LocalPlayer
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Tunggu PlayerGui
-local playerGui = Player:WaitForChild("PlayerGui", 10)
-if not playerGui then
-    warn("❌ PlayerGui tidak ditemukan!")
-    return
-end
+-- Tunggu hingga game benar-benar load
+wait(5)
 
--- Event dengan cache
-local EventCache = {}
-local function getNetEvent(path)
-    if EventCache[path] then
-        return EventCache[path]
-    end
-    
-    local parts = string.split(path, "/")
-    local current = ReplicatedStorage
-    
-    for i, part in parts do
-        current = current:FindFirstChild(part)
-        if not current then
-            current = ReplicatedStorage:WaitForChild(part, 5)
-        end
-        if not current then break end
-    end
-    
-    if current then
-        EventCache[path] = current
-    end
-    return current
-end
+print("🚀 Mencoba memuat script auto fish...")
 
--- Inisialisasi event
-local basePath = "Packages/_Index/sleitnick_net@0.2.0/net"
-local Events = {
-    EquipTool = getNetEvent(basePath .. "/RE/EquipToolFromHotbar"),
-    SellAll = getNetEvent(basePath .. "/RF/SellAllItems"),
-    ChargeRod = getNetEvent(basePath .. "/RF/ChargeFishingRod"),
-    RequestMinigame = getNetEvent(basePath .. "/RF/RequestFishingMinigameStarted"),
-    CatchComplete = getNetEvent(basePath .. "/RF/CatchFishCompleted"),
-    Purchase = getNetEvent(basePath .. "/RF/PurchaseMarketItem"),
-    Cancel = getNetEvent(basePath .. "/RF/CancelFishingInputs")
-}
-
--- CEK APAKAH EVENT TERSEDIA
-for name, event in pairs(Events) do
-    if not event then
-        warn("⚠️ Event " .. name .. " tidak ditemukan! Mungkin game berbeda?")
-    else
-        print("✅ Event " .. name .. " ditemukan")
-    end
-end
-
--- ============================================
--- SAFE INVOKE FUNCTION (ANTI 429)
--- ============================================
-local function safeInvoke(event, ...)
-    if not event then return nil end
-    
-    local maxRetry = 10
-    local baseDelay = 5
-    local args = {...}
-    
-    for attempt = 1, maxRetry do
-        local success, result = pcall(function()
-            return event:InvokeServer(unpack(args))
-        end)
-        
-        if success then
-            return result
-        else
-            local errorMsg = tostring(result)
-            print("⚠️ Attempt " .. attempt .. " failed: " .. errorMsg)
-            
-            -- Deteksi error 429
-            if string.find(errorMsg, "429") or string.find(errorMsg, "Too Many Requests") then
-                local waitTime = baseDelay * (2 ^ (attempt - 1)) -- Exponential: 5, 10, 20, 40...
-                print("🕒 Server sibuk (429), tunggu " .. waitTime .. " detik...")
-                wait(waitTime)
-            elseif string.find(errorMsg, "500") or string.find(errorMsg, "Timeout") then
-                wait(10) -- Server error, tunggu 10 detik
-            else
-                wait(2) -- Error lain, tunggu 2 detik
+-- Coba cari event dengan berbagai kemungkinan path
+local function findEvent(...)
+    local paths = {...}
+    for _, path in ipairs(paths) do
+        local obj = ReplicatedStorage
+        local found = true
+        for part in string.gmatch(path, "[^/]+") do
+            obj = obj:FindFirstChild(part)
+            if not obj then
+                found = false
+                break
             end
         end
+        if found then
+            return obj
+        end
     end
-    
-    print("❌ Gagal setelah " .. maxRetry .. " percobaan")
     return nil
 end
 
--- FireServer tidak perlu retry sebanyak InvokeServer
-local function safeFire(event, ...)
-    if not event then return end
-    
-    pcall(function()
-        event:FireServer(...)
-    end)
-end
+-- Cari event dengan multiple path possibilities
+local ChargeRod = findEvent(
+    "Packages/_Index/sleitnick_net@0.2.0/net/RF/ChargeFishingRod",
+    "Packages/_Index/sleitnick_net/net/RF/ChargeFishingRod",
+    "Packages/net/RF/ChargeFishingRod"
+)
 
--- ============================================
--- VARIABEL KONTROL
--- ============================================
-local autoFishing = false
-local autoBuy = false
-local autoSell = false
-local fishCount = 0
-local startTime = tick()
-local serverBusy = false
+local CatchFish = findEvent(
+    "Packages/_Index/sleitnick_net@0.2.0/net/RF/CatchFishCompleted",
+    "Packages/_Index/sleitnick_net/net/RF/CatchFishCompleted",
+    "Packages/net/RF/CatchFishCompleted"
+)
 
--- ============================================
--- FUNGSI FISHING DENGAN SAFE INVOKE
--- ============================================
-local function equipRod()
-    safeFire(Events.EquipTool, 1)
-end
+local SellAll = findEvent(
+    "Packages/_Index/sleitnick_net@0.2.0/net/RF/SellAllItems",
+    "Packages/_Index/sleitnick_net/net/RF/SellAllItems",
+    "Packages/net/RF/SellAllItems"
+)
 
-local function chargeRod()
-    safeInvoke(Events.ChargeRod)
-end
+-- CEK EVENT YANG DITEMUKAN
+print("📡 ChargeRod:", ChargeRod and "✅" or "❌")
+print("📡 CatchFish:", CatchFish and "✅" or "❌")
+print("📡 SellAll:", SellAll and "✅" or "❌")
 
-local function startMinigame()
-    local args = {-0.5, 0.4, tick() * 1000}
-    safeInvoke(Events.RequestMinigame, unpack(args))
-end
-
-local function catchFishNow()
-    local success = safeInvoke(Events.CatchComplete)
-    if success then
-        fishCount = fishCount + 1
-    end
-    return success
-end
-
-local function sellAll()
-    if autoSell then
-        safeInvoke(Events.SellAll)
-    end
-end
-
-local function buyBoosts()
-    if autoBuy then
-        safeInvoke(Events.Purchase, 5) -- Luck
-        wait(1)
-        safeInvoke(Events.Purchase, 7) -- Shiny
-    end
-end
-
--- ============================================
--- CREATE UI SEDERHANA (TIDAK ERROR)
--- ============================================
+-- UI SEDERHANA (TANPA FUNGSI KOMPLEKS)
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AutoFishGUI"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = playerGui
+ScreenGui.Parent = Player:WaitForChild("PlayerGui")
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.Position = UDim2.new(0, 10, 0, 10)
-MainFrame.Size = UDim2.new(0, 300, 0, 200)
-MainFrame.Active = true
-MainFrame.Draggable = true
+local Frame = Instance.new("Frame")
+Frame.Parent = ScreenGui
+Frame.Size = UDim2.new(0, 200, 0, 150)
+Frame.Position = UDim2.new(0, 50, 0, 50)
+Frame.BackgroundColor3 = Color3.new(0, 0, 0)
+Frame.BackgroundTransparency = 0.3
+Frame.Active = true
+Frame.Draggable = true
 
 local Title = Instance.new("TextLabel")
-Title.Parent = MainFrame
-Title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Title.Parent = Frame
 Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Text = "🎣 AUTO FISH (429 PROTECTED)"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 16
+Title.Text = "AUTO FISH"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
 
--- Status server
-local ServerStatus = Instance.new("TextLabel")
-ServerStatus.Parent = MainFrame
-ServerStatus.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-ServerStatus.Position = UDim2.new(0, 10, 0, 40)
-ServerStatus.Size = UDim2.new(1, -20, 0, 25)
-ServerStatus.Text = "🟢 Server: Normal"
-ServerStatus.TextColor3 = Color3.fromRGB(0, 255, 0)
-ServerStatus.Font = Enum.Font.SourceSans
-ServerStatus.TextSize = 14
+local Status = Instance.new("TextLabel")
+Status.Parent = Frame
+Status.Position = UDim2.new(0, 0, 0, 35)
+Status.Size = UDim2.new(1, 0, 0, 30)
+Status.Text = "Status: SIAP"
+Status.TextColor3 = Color3.new(0, 1, 0)
+Status.BackgroundTransparency = 1
 
--- Tombol Start/Stop
-local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Parent = MainFrame
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-ToggleBtn.Position = UDim2.new(0, 10, 0, 75)
-ToggleBtn.Size = UDim2.new(0, 135, 0, 35)
-ToggleBtn.Text = "🚀 START AUTO"
-ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleBtn.Font = Enum.Font.SourceSansBold
-ToggleBtn.TextSize = 16
+local StartBtn = Instance.new("TextButton")
+StartBtn.Parent = Frame
+StartBtn.Position = UDim2.new(0, 10, 0, 70)
+StartBtn.Size = UDim2.new(0, 80, 0, 30)
+StartBtn.Text = "MULAI"
+StartBtn.BackgroundColor3 = Color3.new(0, 0.5, 0)
 
--- Tombol Auto Buy
-local BuyBtn = Instance.new("TextButton")
-BuyBtn.Parent = MainFrame
-BuyBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-BuyBtn.Position = UDim2.new(0, 155, 0, 75)
-BuyBtn.Size = UDim2.new(0, 135, 0, 35)
-BuyBtn.Text = "🛒 AUTO BUY: OFF"
-BuyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-BuyBtn.Font = Enum.Font.SourceSans
-BuyBtn.TextSize = 14
+local StopBtn = Instance.new("TextButton")
+StopBtn.Parent = Frame
+StopBtn.Position = UDim2.new(0, 100, 0, 70)
+StopBtn.Size = UDim2.new(0, 80, 0, 30)
+StopBtn.Text = "STOP"
+StopBtn.BackgroundColor3 = Color3.new(0.5, 0, 0)
 
--- Tombol Auto Sell
 local SellBtn = Instance.new("TextButton")
-SellBtn.Parent = MainFrame
-SellBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-SellBtn.Position = UDim2.new(0, 10, 0, 120)
-SellBtn.Size = UDim2.new(0, 135, 0, 35)
-SellBtn.Text = "💰 AUTO SELL: OFF"
-SellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-SellBtn.Font = Enum.Font.SourceSans
-SellBtn.TextSize = 14
+SellBtn.Parent = Frame
+SellBtn.Position = UDim2.new(0, 10, 0, 110)
+SellBtn.Size = UDim2.new(0, 170, 0, 30)
+SellBtn.Text = "JUAL SEMUA"
+SellBtn.BackgroundColor3 = Color3.new(0.8, 0.4, 0)
 
--- Tombol Manual Sell
-local ManualSellBtn = Instance.new("TextButton")
-ManualSellBtn.Parent = MainFrame
-ManualSellBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
-ManualSellBtn.Position = UDim2.new(0, 155, 0, 120)
-ManualSellBtn.Size = UDim2.new(0, 135, 0, 35)
-ManualSellBtn.Text = "💰 JUAL SEMUA"
-ManualSellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ManualSellBtn.Font = Enum.Font.SourceSans
-ManualSellBtn.TextSize = 14
+-- VARIABEL
+local fishing = false
 
--- Status & Counter
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Parent = MainFrame
-StatusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-StatusLabel.Position = UDim2.new(0, 10, 0, 165)
-StatusLabel.Size = UDim2.new(1, -20, 0, 25)
-StatusLabel.Text = "🐟 Ikan: 0 | Status: Idle"
-StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-StatusLabel.Font = Enum.Font.SourceSans
-StatusLabel.TextSize = 14
-
--- ============================================
--- MONITOR SERVER STATUS
--- ============================================
-spawn(function()
-    while true do
-        wait(10)
-        -- Cek server dengan ping ringan
-        local success = pcall(function()
-            Events.ChargeRod:InvokeServer()
+-- FUNGSI DENGAN PENGECEKAN
+local function safeInvoke(event)
+    if event and typeof(event) == "Instance" and event:IsA("RemoteFunction") then
+        local success, result = pcall(function()
+            return event:InvokeServer()
         end)
-        
-        if not success then
-            serverBusy = true
-            ServerStatus.Text = "🔴 Server: Sibuk (Rate Limit)"
-            ServerStatus.TextColor3 = Color3.fromRGB(255, 0, 0)
-        else
-            serverBusy = false
-            ServerStatus.Text = "🟢 Server: Normal"
-            ServerStatus.TextColor3 = Color3.fromRGB(0, 255, 0)
-        end
+        return success
+    elseif event and typeof(event) == "Instance" and event:IsA("RemoteEvent") then
+        pcall(function()
+            event:FireServer()
+        end)
+        return true
     end
-end)
+    return false
+end
 
--- ============================================
--- FISHING LOOP DENGAN ADAPTIVE DELAY
--- ============================================
-function startFishing()
-    while autoFishing do
-        -- Update statistik
-        local elapsed = tick() - startTime
-        local minutes = math.floor(elapsed / 60)
-        local seconds = math.floor(elapsed % 60)
+-- LOOP FISHING SEDERHANA
+local function fishingLoop()
+    while fishing do
+        Status.Text = "Status: FISHING..."
         
-        -- Jika server sibuk, delay lebih lama
-        local baseDelay = serverBusy and 5 or 0.5
+        -- Charge
+        safeInvoke(ChargeRod)
+        wait(1)
         
-        StatusLabel.Text = string.format("🐟 Ikan: %d | ⏱️ %d:%02d | Status: Fishing", 
-            fishCount, minutes, seconds)
+        -- Catch
+        safeInvoke(CatchFish)
+        wait(0.5)
         
-        equipRod()
-        wait(0.2)
-        
-        chargeRod()
-        wait(0.3)
-        
-        startMinigame()
-        wait(serverBusy and 3 or 1) -- Tunggu lebih lama jika server sibuk
-        
-        local caught = catchFishNow()
-        
-        if caught then
-            -- Auto sell setiap 3 ikan
-            if fishCount % 3 == 0 and autoSell then
-                sellAll()
-                wait(0.5)
-            end
-            
-            -- Auto buy setiap 6 ikan
-            if fishCount % 6 == 0 and autoBuy then
-                buyBoosts()
-            end
-        end
-        
-        wait(baseDelay)
+        Status.Text = "Status: DAPET IKAN"
+        wait(1)
     end
 end
 
--- ============================================
--- EVENT HANDLERS
--- ============================================
-ToggleBtn.MouseButton1Click:Connect(function()
-    autoFishing = not autoFishing
-    if autoFishing then
-        ToggleBtn.Text = "⏹️ STOP AUTO"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-        StatusLabel.Text = "Status: Starting..."
-        startTime = tick()
-        coroutine.wrap(startFishing)()
-    else
-        ToggleBtn.Text = "🚀 START AUTO"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        StatusLabel.Text = "Status: Stopped"
-        safeInvoke(Events.Cancel, true)
+-- EVENT BUTTON
+StartBtn.MouseButton1Click:Connect(function()
+    if not fishing then
+        fishing = true
+        Status.Text = "Status: MULAI"
+        coroutine.wrap(fishingLoop)()
     end
 end)
 
-BuyBtn.MouseButton1Click:Connect(function()
-    autoBuy = not autoBuy
-    BuyBtn.Text = autoBuy and "🛒 AUTO BUY: ON" or "🛒 AUTO BUY: OFF"
-    BuyBtn.BackgroundColor3 = autoBuy and Color3.fromRGB(0, 100, 200) or Color3.fromRGB(80, 80, 80)
+StopBtn.MouseButton1Click:Connect(function()
+    fishing = false
+    Status.Text = "Status: STOP"
 end)
 
 SellBtn.MouseButton1Click:Connect(function()
-    autoSell = not autoSell
-    SellBtn.Text = autoSell and "💰 AUTO SELL: ON" or "💰 AUTO SELL: OFF"
-    SellBtn.BackgroundColor3 = autoSell and Color3.fromRGB(200, 100, 0) or Color3.fromRGB(80, 80, 80)
-end)
-
-ManualSellBtn.MouseButton1Click:Connect(function()
-    StatusLabel.Text = "Status: Menjual..."
-    sellAll()
+    Status.Text = "Status: MENJUAL..."
+    safeInvoke(SellAll)
     wait(1)
-    StatusLabel.Text = "Status: Siap"
+    Status.Text = "Status: SIAP"
 end)
 
--- Anti-AFK
-local VirtualUser = game:GetService("VirtualUser")
-Player.Idled:Connect(function()
-    VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    wait(1)
-    VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-end)
-
-print([[
-╔════════════════════════════════════╗
-║  AUTO FISH WITH 429 PROTECTION     ║
-║  ✅ Siap digunakan                 ║
-║  🛡️ Anti Rate Limit: ACTIVE        ║
-║  ⏱️ Exponential Backoff: ENABLED    ║
-╚════════════════════════════════════╝
-]])
+print("✅ Script sederhana loaded - Semoga tidak error!")
