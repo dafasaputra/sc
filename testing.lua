@@ -1,262 +1,321 @@
--- Script Fish It - Versi Ultra Stabil
--- Tanpa library rumit, menggunakan UI sederhana
+-- ULTRA SIMPLE FISH IT SCRIPT
+-- Tanpa loadstring, tanpa HTTP request, tanpa library external
 
--- Variables
+-- Anti-error wrapper
+local function protect(func)
+    return function(...)
+        local success, result = pcall(func, ...)
+        return success and result or nil
+    end
+end
+
+-- Hapus GUI lama dengan aman
+protect(function()
+    local oldGui = game.Players.LocalPlayer.PlayerGui:FindFirstChild("FishItGUI")
+    if oldGui then oldGui:Destroy() end
+end)()
+
+-- Variables aman
 local player = game:GetService("Players").LocalPlayer
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local rs = game:GetService("ReplicatedStorage")
 
--- Cari Net dengan aman
-local Net = nil
-local function findNet()
-    local packages = ReplicatedStorage:FindFirstChild("Packages")
-    if packages then
+-- Cari remote dengan aman (tanpa error)
+local function findRemotes()
+    local remotes = {}
+    local success = pcall(function()
+        local packages = rs:FindFirstChild("Packages")
+        if not packages then return end
+        
         local index = packages:FindFirstChild("_Index")
-        if index then
-            for _, v in pairs(index:GetChildren()) do
-                if v.Name:find("sleitnick_net") then
-                    local net = v:FindFirstChild("net")
-                    if net then
-                        return net
+        if not index then return end
+        
+        for _, folder in pairs(index:GetChildren()) do
+            if type(folder.Name) == "string" and folder.Name:find("sleitnick_net") then
+                local net = folder:FindFirstChild("net")
+                if net then
+                    for _, remote in pairs(net:GetChildren()) do
+                        remotes[remote.Name] = remote
                     end
                 end
+                break
             end
         end
-    end
-    return nil
+    end)
+    return remotes
 end
 
-Net = findNet()
+local Remotes = findRemotes()
 
--- Remote events
-local Remotes = {}
-if Net then
-    Remotes = {
-        EquipRod = Net:FindFirstChild("RE/EquipToolFromHotbar"),
-        SellAll = Net:FindFirstChild("RF/SellAllItems"),
-        Charge = Net:FindFirstChild("RF/ChargeFishingRod"),
-        Request = Net:FindFirstChild("RF/RequestFishingMinigameStarted"),
-        Catch = Net:FindFirstChild("RF/CatchFishCompleted"),
-        Purchase = Net:FindFirstChild("RF/PurchaseMarketItem"),
-        Cancel = Net:FindFirstChild("RF/CancelFishingInputs")
-    }
-end
-
--- Status
-local isRunning = {
-    autoFishing = false,
-    autoSell = false,
-    autoBuy = false
-}
-
--- UI Sederhana (ScreenGui)
+-- UI Sederhana (Roblox native, tanpa external)
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "FishItGUI"
+screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- Frame utama
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 300, 0, 400)
-mainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.Size = UDim2.new(0, 250, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -125, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 mainFrame.BackgroundTransparency = 0.1
 mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Parent = screenGui
 
--- Judul
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 30)
-title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-title.Text = "Fish It Script by OxyX"
+title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+title.Text = "Fish It - Simple"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.SourceSansBold
 title.TextSize = 18
 title.Parent = mainFrame
 
--- Scroll frame untuk buttons
-local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size = UDim2.new(1, 0, 1, -35)
-scrollFrame.Position = UDim2.new(0, 0, 0, 35)
-scrollFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-scrollFrame.ScrollBarThickness = 8
-scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-scrollFrame.Parent = mainFrame
+-- Status indicator
+local statusText = Instance.new("TextLabel")
+statusText.Size = UDim2.new(1, -10, 0, 20)
+statusText.Position = UDim2.new(0, 5, 0, 35)
+statusText.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+statusText.Text = "Status: Ready"
+statusText.TextColor3 = Color3.fromRGB(0, 255, 0)
+statusText.Font = Enum.Font.SourceSans
+statusText.TextSize = 14
+statusText.Parent = mainFrame
 
-local layout = Instance.new("UIListLayout")
-layout.Parent = scrollFrame
-layout.Padding = UDim.new(0, 5)
-layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+-- Auto Fishing Toggle
+local autoFishBtn = Instance.new("TextButton")
+autoFishBtn.Size = UDim2.new(1, -20, 0, 35)
+autoFishBtn.Position = UDim2.new(0, 10, 0, 65)
+autoFishBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+autoFishBtn.Text = "Auto Fishing: OFF"
+autoFishBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoFishBtn.Font = Enum.Font.SourceSansBold
+autoFishBtn.TextSize = 16
+autoFishBtn.Parent = mainFrame
 
--- Fungsi membuat button
-function createButton(text, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 35)
-    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.SourceSans
-    btn.TextSize = 16
-    btn.Parent = scrollFrame
-    
-    btn.MouseButton1Click:Connect(function()
-        pcall(callback)
-    end)
-    
-    return btn
-end
+-- Auto Sell Toggle
+local autoSellBtn = Instance.new("TextButton")
+autoSellBtn.Size = UDim2.new(1, -20, 0, 35)
+autoSellBtn.Position = UDim2.new(0, 10, 0, 105)
+autoSellBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+autoSellBtn.Text = "Auto Sell: OFF"
+autoSellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoSellBtn.Font = Enum.Font.SourceSansBold
+autoSellBtn.TextSize = 16
+autoSellBtn.Parent = mainFrame
 
--- Fungsi membuat toggle
-function createToggle(text, varName)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0.9, 0, 0, 35)
-    frame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    frame.Parent = scrollFrame
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.7, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.Font = Enum.Font.SourceSans
-    label.TextSize = 16
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = frame
-    
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.25, 0, 0.8, 0)
-    btn.Position = UDim2.new(0.75, 0, 0.1, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    btn.Text = "OFF"
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.SourceSansBold
-    btn.TextSize = 14
-    btn.Parent = frame
-    
-    btn.MouseButton1Click:Connect(function()
-        pcall(function()
-            isRunning[varName] = not isRunning[varName]
-            if isRunning[varName] then
-                btn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-                btn.Text = "ON"
-            else
-                btn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-                btn.Text = "OFF"
-            end
-        end)
-    end)
-end
+-- Auto Buy Toggle
+local autoBuyBtn = Instance.new("TextButton")
+autoBuyBtn.Size = UDim2.new(1, -20, 0, 35)
+autoBuyBtn.Position = UDim2.new(0, 10, 0, 145)
+autoBuyBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+autoBuyBtn.Text = "Auto Buy: OFF"
+autoBuyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+autoBuyBtn.Font = Enum.Font.SourceSansBold
+autoBuyBtn.TextSize = 16
+autoBuyBtn.Parent = mainFrame
 
--- Buat UI
-createToggle("Auto Fishing", "autoFishing")
-createToggle("Auto Sell", "autoSell")
-createToggle("Auto Buy (Luck/Shiny)", "autoBuy")
+-- Manual Buttons
+local chargeBtn = Instance.new("TextButton")
+chargeBtn.Size = UDim2.new(0.45, -5, 0, 30)
+chargeBtn.Position = UDim2.new(0, 10, 0, 190)
+chargeBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+chargeBtn.Text = "Charge"
+chargeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+chargeBtn.Font = Enum.Font.SourceSans
+chargeBtn.TextSize = 14
+chargeBtn.Parent = mainFrame
 
--- Separator
-local sep = Instance.new("Frame")
-sep.Size = UDim2.new(0.9, 0, 0, 2)
-sep.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-sep.BackgroundTransparency = 0.7
-sep.Parent = scrollFrame
+local sellBtn = Instance.new("TextButton")
+sellBtn.Size = UDim2.new(0.45, -5, 0, 30)
+sellBtn.Position = UDim2.new(0.55, -5, 0, 190)
+sellBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+sellBtn.Text = "Sell All"
+sellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+sellBtn.Font = Enum.Font.SourceSans
+sellBtn.TextSize = 14
+sellBtn.Parent = mainFrame
 
--- Buttons
-createButton("Charge Rod", function()
-    if Remotes.Charge then
-        Remotes.Charge:InvokeServer()
-    end
-end)
+local luckBtn = Instance.new("TextButton")
+luckBtn.Size = UDim2.new(0.45, -5, 0, 30)
+luckBtn.Position = UDim2.new(0, 10, 0, 225)
+luckBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+luckBtn.Text = "Buy Luck"
+luckBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+luckBtn.Font = Enum.Font.SourceSans
+luckBtn.TextSize = 14
+luckBtn.Parent = mainFrame
 
-createButton("Cancel Fishing", function()
-    if Remotes.Cancel then
-        Remotes.Cancel:InvokeServer(true)
-    end
-end)
+local shinyBtn = Instance.new("TextButton")
+shinyBtn.Size = UDim2.new(0.45, -5, 0, 30)
+shinyBtn.Position = UDim2.new(0.55, -5, 0, 225)
+shinyBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+shinyBtn.Text = "Buy Shiny"
+shinyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+shinyBtn.Font = Enum.Font.SourceSans
+shinyBtn.TextSize = 14
+shinyBtn.Parent = mainFrame
 
-createButton("Sell All", function()
-    if Remotes.SellAll then
-        Remotes.SellAll:InvokeServer()
-    end
-end)
+local equipBtn = Instance.new("TextButton")
+equipBtn.Size = UDim2.new(1, -20, 0, 30)
+equipBtn.Position = UDim2.new(0, 10, 0, 260)
+equipBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+equipBtn.Text = "Equip Rod (Slot 1)"
+equipBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+equipBtn.Font = Enum.Font.SourceSans
+equipBtn.TextSize = 14
+equipBtn.Parent = mainFrame
 
-createButton("Buy Luck (ID 5)", function()
-    if Remotes.Purchase then
-        Remotes.Purchase:InvokeServer(5)
-    end
-end)
-
-createButton("Buy Shiny (ID 7)", function()
-    if Remotes.Purchase then
-        Remotes.Purchase:InvokeServer(7)
-    end
-end)
-
-createButton("Equip Rod (Slot 1)", function()
-    if Remotes.EquipRod then
-        Remotes.EquipRod:FireServer(1)
-    end
-end)
-
--- Auto Fishing Loop
-spawn(function()
-    while true do
-        wait(0.1)
-        pcall(function()
-            if isRunning.autoFishing and Remotes.Charge and Remotes.Catch then
-                Remotes.Charge:InvokeServer()
-                wait(0.5)
-                Remotes.Catch:InvokeServer()
-                wait(0.5)
-            end
-        end)
-    end
-end)
-
--- Auto Sell Loop
-spawn(function()
-    while true do
-        wait(30)
-        pcall(function()
-            if isRunning.autoSell and Remotes.SellAll then
-                Remotes.SellAll:InvokeServer()
-            end
-        end)
-    end
-end)
-
--- Auto Buy Loop (bergantian Luck dan Shiny)
+-- Status variables
+local autoFishing = false
+local autoSell = false
+local autoBuy = false
 local buyCounter = 0
+
+-- Fungsi aman untuk invoke remote
+local function safeInvoke(remoteName, ...)
+    local remote = Remotes[remoteName]
+    if remote and remote.ClassName == "RemoteFunction" then
+        return pcall(function()
+            return remote:InvokeServer(...)
+        end)
+    elseif remote and remote.ClassName == "RemoteEvent" then
+        return pcall(function()
+            remote:FireServer(...)
+            return true
+        end)
+    end
+    return false, "Remote not found"
+end
+
+-- Button callbacks (semua dilindungi pcall)
+chargeBtn.MouseButton1Click:Connect(function()
+    local success, result = safeInvoke("RF/ChargeFishingRod")
+    statusText.Text = success and "Charged!" or "Charge failed"
+    statusText.TextColor3 = success and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    wait(1)
+    statusText.Text = "Status: Ready"
+    statusText.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)
+
+sellBtn.MouseButton1Click:Connect(function()
+    local success, result = safeInvoke("RF/SellAllItems")
+    statusText.Text = success and "Sold!" or "Sell failed"
+    statusText.TextColor3 = success and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    wait(1)
+    statusText.Text = "Status: Ready"
+    statusText.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)
+
+luckBtn.MouseButton1Click:Connect(function()
+    local success, result = safeInvoke("RF/PurchaseMarketItem", 5)
+    statusText.Text = success and "Luck bought!" or "Buy failed"
+    statusText.TextColor3 = success and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    wait(1)
+    statusText.Text = "Status: Ready"
+    statusText.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)
+
+shinyBtn.MouseButton1Click:Connect(function()
+    local success, result = safeInvoke("RF/PurchaseMarketItem", 7)
+    statusText.Text = success and "Shiny bought!" or "Buy failed"
+    statusText.TextColor3 = success and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    wait(1)
+    statusText.Text = "Status: Ready"
+    statusText.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)
+
+equipBtn.MouseButton1Click:Connect(function()
+    local success, result = safeInvoke("RE/EquipToolFromHotbar", 1)
+    statusText.Text = success and "Equipped!" or "Equip failed"
+    statusText.TextColor3 = success and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    wait(1)
+    statusText.Text = "Status: Ready"
+    statusText.TextColor3 = Color3.fromRGB(0, 255, 0)
+end)
+
+-- Toggle buttons
+autoFishBtn.MouseButton1Click:Connect(function()
+    autoFishing = not autoFishing
+    autoFishBtn.BackgroundColor3 = autoFishing and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    autoFishBtn.Text = autoFishing and "Auto Fishing: ON" or "Auto Fishing: OFF"
+    statusText.Text = autoFishing and "Auto Fishing Started" or "Auto Fishing Stopped"
+    wait(1)
+    statusText.Text = "Status: Ready"
+end)
+
+autoSellBtn.MouseButton1Click:Connect(function()
+    autoSell = not autoSell
+    autoSellBtn.BackgroundColor3 = autoSell and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    autoSellBtn.Text = autoSell and "Auto Sell: ON" or "Auto Sell: OFF"
+end)
+
+autoBuyBtn.MouseButton1Click:Connect(function()
+    autoBuy = not autoBuy
+    autoBuyBtn.BackgroundColor3 = autoBuy and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    autoBuyBtn.Text = autoBuy and "Auto Buy: ON" or "Auto Buy: OFF"
+end)
+
+-- Main loops dengan interval aman
 spawn(function()
     while true do
-        wait(60)
-        pcall(function()
-            if isRunning.autoBuy and Remotes.Purchase then
-                buyCounter = buyCounter + 1
-                if buyCounter % 2 == 1 then
-                    Remotes.Purchase:InvokeServer(5) -- Luck
-                else
-                    Remotes.Purchase:InvokeServer(7) -- Shiny
-                end
-            end
-        end)
+        wait(2) -- Interval 2 detik untuk fishing
+        if autoFishing then
+            pcall(function()
+                safeInvoke("RF/ChargeFishingRod")
+                wait(0.5)
+                safeInvoke("RF/CatchFishCompleted")
+            end)
+        end
     end
 end)
 
--- Update canvas size
-layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
+spawn(function()
+    while true do
+        wait(30) -- Interval 30 detik untuk sell
+        if autoSell then
+            pcall(function()
+                safeInvoke("RF/SellAllItems")
+            end)
+        end
+    end
 end)
 
--- Notifikasi sederhana
-local notification = Instance.new("TextLabel")
-notification.Size = UDim2.new(0.8, 0, 0, 30)
-notification.Position = UDim2.new(0.1, 0, 0.8, 0)
-notification.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-notification.BackgroundTransparency = 0.3
-notification.Text = "Script Loaded!"
-notification.TextColor3 = Color3.fromRGB(0, 0, 0)
-notification.Font = Enum.Font.SourceSansBold
-notification.TextSize = 16
-notification.Parent = screenGui
+spawn(function()
+    while true do
+        wait(45) -- Interval 45 detik untuk buy
+        if autoBuy then
+            pcall(function()
+                buyCounter = buyCounter + 1
+                local itemId = (buyCounter % 2 == 1) and 5 or 7
+                safeInvoke("RF/PurchaseMarketItem", itemId)
+            end)
+        end
+    end
+end)
 
--- Hilangkan notifikasi setelah 2 detik
-wait(2)
-notification:Destroy()
+-- Info remote status
+local remoteStatus = Instance.new("TextLabel")
+remoteStatus.Size = UDim2.new(1, -10, 0, 20)
+remoteStatus.Position = UDim2.new(0, 5, 1, -25)
+remoteStatus.BackgroundTransparency = 1
+remoteStatus.Text = #Remotes > 0 and "✅ Remotes: " .. #Remotes .. " found" or "❌ No remotes found"
+remoteStatus.TextColor3 = #Remotes > 0 and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+remoteStatus.Font = Enum.Font.SourceSans
+remoteStatus.TextSize = 12
+remoteStatus.TextXAlignment = Enum.TextXAlignment.Left
+remoteStatus.Parent = mainFrame
+
+-- Close button
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 60, 0, 25)
+closeBtn.Position = UDim2.new(1, -65, 0, 3)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 16
+closeBtn.Parent = mainFrame
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
