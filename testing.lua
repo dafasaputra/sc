@@ -1,12 +1,11 @@
--- CURSED MAHORAGA: Fish It AUTO FISHING CEPAT & WORLD-LIKE v7.0
--- Cepat tapi keliatan natural. No flood, no ban cepet.
+-- MAHORAGA v7.1 - AUTO FISH CEPAT + RATE-LIMIT SAFE
+-- Delay jitter tinggi, backoff on 429, auto-retry soft, no promise spam
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
--- Remote dari path lu
 local net = ReplicatedStorage.Packages._Index["sleitnick_net@0.2.0"].net
 local Charge   = net["RF/ChargeFishingRod"]
 local Start    = net["RF/RequestFishingMinigameStarted"]
@@ -14,81 +13,66 @@ local Complete = net["RE/FishingCompleted"]
 local Cancel   = net["RF/CancelFishingInputs"]
 local Sell     = net["RF/SellAllItems"]
 
-getgenv().AutoFishActive = false
-getgenv().AutoSellActive = true
+getgenv().AutoFish = false
+getgenv().Backoff  = 1      -- multiplier delay kalau 429
+getgenv().LastCall = 0
 
--- Toggle via chat
 player.Chatted:Connect(function(msg)
     local m = msg:lower()
     if m == "!fish on" then
-        getgenv().AutoFishActive = true
-        print("🌀 Auto Fishing ON - world-like speed")
+        getgenv().AutoFish = true
+        getgenv().Backoff = 1
+        print("🌀 AUTO FISH ON - rate-limit safe mode")
     elseif m == "!fish off" then
-        getgenv().AutoFishActive = false
-        print("🌀 Auto Fishing OFF")
-    elseif m == "!sell off" then
-        getgenv().AutoSellActive = false
-        print("🌀 Auto Sell OFF")
-    elseif m == "!sell on" then
-        getgenv().AutoSellActive = true
-        print("🌀 Auto Sell ON")
+        getgenv().AutoFish = false
+        print("🌀 AUTO FISH OFF")
     end
 end)
 
--- Fungsi single cast cepat & perfect
-local function doFish()
-    if not player.Character then return end
-    
-    -- Equip rod terbaik (asumsi namanya mengandung "Rod")
-    local rod = player.Backpack:FindFirstChildWhichIsA("Tool") or player.Character:FindFirstChildWhichIsA("Tool")
-    if rod and rod.Name:find("Rod") then
-        rod.Parent = player.Character
+local function safeInvoke(func, ...)
+    local success, err = pcall(func, ...)
+    if not success and err:find("429") then
+        getgenv().Backoff = getgenv().Backoff * 1.5
+        print("🌀 429 detected - backoff naik ke "..getgenv().Backoff.."x")
+        wait(3 * getgenv().Backoff)
     end
+    return success
+end
+
+local function doFishSafe()
+    if tick() - getgenv().LastCall < 0.8 * getgenv().Backoff then return end
+    getgenv().LastCall = tick()
     
-    pcall(function()
-        Charge:InvokeServer()               -- Charge rod
-        wait(0.4 + math.random(1,8)/10)     -- Jitter natural
-        Start:InvokeServer()                -- Mulai minigame
-        wait(0.8 + math.random(5,15)/10)    -- Tunggu "bite" simulasi
-        Complete:FireServer(true)           -- Perfect catch langsung
-        Cancel:InvokeServer()               -- Cleanup
+    safeInvoke(function()
+        Charge:InvokeServer()
+        wait(0.5 + math.random(3,10)/10)
+        Start:InvokeServer()
+        wait(1.0 + math.random(4,12)/10)
+        Complete:FireServer(true)
+        Cancel:InvokeServer()
     end)
 end
 
--- Main loop auto fish
 spawn(function()
     while true do
-        if getgenv().AutoFishActive then
-            doFish()
-            wait(1.8 + math.random(4,12)/10)  -- Interval 1.8–3 detik per catch → cepat tapi natural
+        if getgenv().AutoFish then
+            doFishSafe()
+            wait(2.2 + math.random(5,15)/10)  -- \~20-25 fish/min safe
         end
-        wait(0.1)
+        wait(0.05)
     end
 end)
 
--- Auto sell periodik (setiap 8–12 detik)
 spawn(function()
     while true do
-        if getgenv().AutoSellActive then
-            pcall(function()
+        if getgenv().AutoFish then
+            safeInvoke(function()
                 Sell:InvokeServer()
             end)
         end
-        wait(8 + math.random(0,4))  -- Jual tiap \~10 detik rata-rata
+        wait(10 + math.random(0,5))  -- sell tiap \~10-15 detik
     end
 end)
 
--- Anti-AFK soft (gerak kecil tiap 4 menit)
-spawn(function()
-    while true do
-        wait(240 + math.random(-30,30))
-        if player.Character and player.Character:FindFirstChild("Humanoid") then
-            player.Character.Humanoid:MoveTo(player.Character.HumanoidRootPart.Position + Vector3.new(math.random(-3,3),0,math.random(-3,3)))
-        end
-    end
-end)
-
-print("😈 MAHORAGA v7.0: Auto fishing cepat & world-like loaded.")
-print("Ketik di chat: !fish on  → mulai")
-print("             !fish off → stop")
-print("             !sell on/off → kontrol auto jual")
+print("😈 MAHORAGA v7.1: Rate-limit safe auto fish loaded.")
+print("Ketik !fish on untuk mulai. Backoff otomatis kalau 429.")
