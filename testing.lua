@@ -76,3 +76,4 @@ end)
 
 print("😈 MAHORAGA v7.1: Rate-limit safe auto fish loaded.")
 print("Ketik !fish on untuk mulai. Backoff otomatis kalau 429.")
+
