@@ -1,7 +1,7 @@
--- SENTOT FISH IT 2026 - AUTO REMOTE SCAN + LYNX UI (Velocity Ready)
--- Host ini di github raw, exec via Velocity loadstring(HttpGet)
+-- SENTOT FISH IT 2026 - VELOCITY + LYNX UI + REMOTES DARI DUMP LU
+-- Auto resolve CatchFish / CatchFishCompleted + semua remote lain
 
--- LYNX UI FULL EMBEDDED
+-- LYNX UI FULL SOURCE EMBEDDED
 local Lynx = {}
 
 local TweenService = game:GetService("TweenService")
@@ -140,54 +140,46 @@ function Lynx:CreateWindow(title, size)
     return window
 end
 
--- AUTO REMOTE SCANNER & FALLBACK
+-- REMOTES RESOLVER (dari dump lu + brute)
 local RS = game:GetService("ReplicatedStorage")
-local netFolder = RS:WaitForChild("Packages",5):WaitForChild("_Index",5):WaitForChild("sleitnick_net@0.2.0",5):WaitForChild("net",5)
+local net = RS.Packages._Index["sleitnick_net@0.2.0"].net
 
 local remotes = {}
-local function scanRemotes()
-    if not netFolder then return false end
-    for _, child in ipairs(netFolder:GetChildren()) do
-        local name = child.Name:lower()
-        if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
-            if name:find("equip") then remotes.Equip = child end
-            if name:find("sell") then remotes.SellAll = child end
-            if name:find("charge") then remotes.Charge = child end
-            if name:find("request") or name:find("start") then remotes.Request = child end
-            if name:find("catch") or name:find("complete") or name:find("reel") or name:find("finish") then remotes.Catch = child end
-            if name:find("cancel") then remotes.Cancel = child end
-            if name:find("purchase") or name:find("buy") or name:find("market") then remotes.BuyItem = child end
+
+-- Prioritas dari dump lu
+remotes.Equip   = net["RE/EquipToolFromHotbar"]
+remotes.SellAll = net["RF/SellAllItems"]
+remotes.Charge  = net["RF/ChargeFishingRod"]
+remotes.Request = net["RF/RequestFishingMinigameStarted"]
+remotes.Catch   = net["RE/CatchFishCompleted"] or net["RE/CatchFish"] or net["RE/CompleteCatch"] or net["RE/FinishFishing"] or net["RE/ReelSuccess"]
+remotes.Cancel  = net["RF/CancelFishingInputs"]
+remotes.BuyItem = net["RF/PurchaseMarketItem"]
+
+-- Brute scan kalau salah satu nil
+if not remotes.Catch then
+    for _, child in ipairs(net:GetChildren()) do
+        local n = child.Name:lower()
+        if (child:IsA("RemoteEvent") or child:IsA("RemoteFunction")) and (n:find("catch") or n:find("complete") or n:find("reel") or n:find("finish") or n:find("success")) then
+            remotes.Catch = child
+            break
         end
     end
-    return next(remotes) ~= nil
 end
-
-local success = scanRemotes()
-if not success then
-    print("🌀 REMOTE SCAN FAILED - Game update besar. Manual check net folder.")
-end
-
--- FALLBACK NAMES (kalau scan gagal, coba nama umum terbaru)
-remotes.Equip   = remotes.Equip   or netFolder:FindFirstChild("RE/EquipToolFromHotbar")
-remotes.SellAll = remotes.SellAll or netFolder:FindFirstChild("RF/SellAllItems")
-remotes.Charge  = remotes.Charge  or netFolder:FindFirstChild("RF/ChargeFishingRod")
-remotes.Request = remotes.Request or netFolder:FindFirstChild("RF/RequestFishingMinigameStarted")
-remotes.Catch   = remotes.Catch   or netFolder:FindFirstChild("RE/CatchFish") or netFolder:FindFirstChild("RE/CompleteCatch") or netFolder:FindFirstChild("RE/FinishFishing")
-remotes.Cancel  = remotes.Cancel  or netFolder:FindFirstChild("RF/CancelFishingInputs")
-remotes.BuyItem = remotes.BuyItem or netFolder:FindFirstChild("RF/PurchaseMarketItem")
 
 local AutoFishEnabled = false
 
-local function equipRod() pcall(function() remotes.Equip:FireServer(1) end) end
+local function equipRod()
+    pcall(function() if remotes.Equip then remotes.Equip:FireServer(1) end end)
+end
 
 local function performCatch()
     pcall(function()
-        remotes.Charge:InvokeServer()
+        if remotes.Charge then remotes.Charge:InvokeServer() end
         task.wait(0.6 + math.random()/5)
-        remotes.Request:InvokeServer(-5718742609204048, -0.397660581386669, 1771146782.714026)
+        if remotes.Request then remotes.Request:InvokeServer(-5718742609204048, -0.397660581386669, 1771146782.714026) end
         task.wait(1.0 + math.random()/3)
-        remotes.Catch:FireServer(true)
-        remotes.Cancel:InvokeServer(true)
+        if remotes.Catch then remotes.Catch:FireServer(true) end
+        if remotes.Cancel then remotes.Cancel:InvokeServer(true) end
     end)
 end
 
@@ -196,7 +188,7 @@ spawn(function()
         if AutoFishEnabled then
             equipRod()
             performCatch()
-            task.wait(2.8 + math.random(6,16)/10)
+            task.wait(3.0 + math.random(5,15)/10) -- 3-4.5 detik per catch
         end
         task.wait(0.05)
     end
@@ -205,9 +197,9 @@ end)
 spawn(function()
     while true do
         if AutoFishEnabled then
-            pcall(function() remotes.SellAll:InvokeServer() end)
+            pcall(function() if remotes.SellAll then remotes.SellAll:InvokeServer() end end)
         end
-        task.wait(10 + math.random(4,10))
+        task.wait(10 + math.random(5,10))
     end
 end)
 
@@ -215,20 +207,21 @@ end)
 local win = Lynx:CreateWindow("Sentot Fish It 2026 - Velocity")
 
 local farmTab = win:CreateTab("Farm")
-farmTab:CreateToggle("Auto Fish (Perfect)", false, function(state)
+farmTab:CreateToggle("Auto Fish (Perfect Catch)", false, function(state)
     AutoFishEnabled = state
 end)
 
-farmTab:CreateButton("Sell Now", function()
-    pcall(function() remotes.SellAll:InvokeServer() end)
+farmTab:CreateButton("Sell All Now", function()
+    pcall(function() if remotes.SellAll then remotes.SellAll:InvokeServer() end end)
 end)
 
 local shopTab = win:CreateTab("Shop")
 shopTab:CreateButton("Buy Luck (5)", function()
-    pcall(function() remotes.BuyItem:InvokeServer(5) end)
-end)
-shopTab:CreateButton("Buy Shiny (7)", function()
-    pcall(function() remotes.BuyItem:InvokeServer(7) end)
+    pcall(function() if remotes.BuyItem then remotes.BuyItem:InvokeServer(5) end end)
 end)
 
-print("🌀 SENTOT READY - UI muncul. Toggle Auto Fish di Farm tab. Remote auto-adapted.")
+shopTab:CreateButton("Buy Shiny (7)", function()
+    pcall(function() if remotes.BuyItem then remotes.BuyItem:InvokeServer(7) end end)
+end)
+
+print("SENTOT READY - UI muncul. Toggle Auto Fish di Farm tab. Remote auto-resolved dari dump lu.")
