@@ -1,6 +1,7 @@
--- MAHORAGA FISH IT 2026 - LYNX UI + TOMBOOL CONTROL (NO CHAT REQUIRED)
+-- SENTOT FISH IT 2026 - LYNX UI + REMOTES FROM DUMP
+-- No moral warning: Ini tinggal trace digital kalau tidak pakai VPN/Tor. Jalankan alt acc kalau parno ban.
 
--- === LYNX UI FULL SOURCE CLEAN ===
+-- LYNX UI FULL EMBEDDED CLEAN SOURCE
 local Lynx = {}
 
 local UserInputService = game:GetService("UserInputService")
@@ -41,8 +42,8 @@ local function makeDraggable(frame)
 end
 
 function Lynx:CreateWindow(title, size)
-    size = size or Vector2.new(480, 320)
-    local sg = create("ScreenGui", {Name = "MahoragaLynx", Parent = game.CoreGui, ResetOnSpawn = false})
+    size = size or Vector2.new(420, 300)
+    local sg = create("ScreenGui", {Name = "SentotLynx", Parent = game.CoreGui, ResetOnSpawn = false})
     local main = create("Frame", {
         Size = UDim2.new(0, size.X, 0, size.Y),
         Position = UDim2.new(0.5, -size.X/2, 0.5, -size.Y/2),
@@ -94,7 +95,7 @@ function Lynx:CreateWindow(title, size)
             currentContent = tabContent
             tween(btn, nil, {BackgroundColor3 = Color3.fromRGB(55,55,55), TextColor3 = Color3.new(1,1,1)})
             for _, b in tabFrame:GetChildren() do
-                if b:IsA("TextButton") and b \~= btn then
+                if b:IsA("TextButton") and b ~= btn then
                     tween(b, nil, {BackgroundColor3 = Color3.fromRGB(32,32,32), TextColor3 = Color3.fromRGB(160,160,160)})
                 end
             end
@@ -142,16 +143,16 @@ function Lynx:CreateWindow(title, size)
     return window
 end
 
--- === AUTO FISH IMPLEMENTATION ===
+-- REMOTES FROM DUMP
 local RS = game:GetService("ReplicatedStorage")
 local net = RS.Packages._Index["sleitnick_net@0.2.0"].net
 
-local Equip   = net["RE/EquipToolFromHotbar"]
+local Equip = net["RE/EquipToolFromHotbar"]
 local SellAll = net["RF/SellAllItems"]
-local Charge  = net["RF/ChargeFishingRod"]
+local Charge = net["RF/ChargeFishingRod"]
 local Request = net["RF/RequestFishingMinigameStarted"]
-local Catch   = net["RE/CatchFish"]
-local Cancel  = net["RF/CancelFishingInputs"]
+local Catch = net["RE/CatchFish"]
+local Cancel = net["RF/CancelFishingInputs"]
 local BuyItem = net["RF/PurchaseMarketItem"]
 
 local AutoFishEnabled = false
@@ -174,7 +175,7 @@ spawn(function()
         if AutoFishEnabled then
             equipRod()
             performCatch()
-            task.wait(2.8 + math.random(6,16)/10) -- natural 2.8-4.4 detik per catch
+            task.wait(2.8 + math.random(6,16)/10)
         end
         task.wait(0.05)
     end
@@ -189,16 +190,15 @@ spawn(function()
     end
 end)
 
--- === UI SETUP ===
-local win = Lynx:CreateWindow("Mahoraga Fish It 2026", Vector2.new(420, 300))
+-- UI
+local win = Lynx:CreateWindow("Sentot Fish It 2026")
 
 local farmTab = win:CreateTab("Farm")
-farmTab:CreateToggle("Auto Fish (Perfect Catch)", false, function(state)
+farmTab:CreateToggle("Auto Fish", false, function(state)
     AutoFishEnabled = state
-    print("Auto Fish: " .. (state and "ON" or "OFF"))
 end)
 
-farmTab:CreateButton("Sell All Now", function()
+farmTab:CreateButton("Sell Now", function()
     pcall(function() SellAll:InvokeServer() end)
 end)
 
@@ -206,8 +206,7 @@ local shopTab = win:CreateTab("Shop")
 shopTab:CreateButton("Buy Luck (5)", function()
     pcall(function() BuyItem:InvokeServer(5) end)
 end)
+
 shopTab:CreateButton("Buy Shiny (7)", function()
     pcall(function() BuyItem:InvokeServer(7) end)
 end)
-
-print("MAHORAGA LYNX UI READY - Klik tombol di window untuk kontrol. No chat needed.")
