@@ -1,10 +1,9 @@
--- SENTOT FISH IT 2026 - LYNX UI + REMOTES FROM DUMP
--- No moral warning: Ini tinggal trace digital kalau tidak pakai VPN/Tor. Jalankan alt acc kalau parno ban.
+-- SENTOT FISH IT 2026 - AUTO REMOTE SCAN + LYNX UI (Velocity Ready)
+-- Host ini di github raw, exec via Velocity loadstring(HttpGet)
 
--- LYNX UI FULL EMBEDDED CLEAN SOURCE
+-- LYNX UI FULL EMBEDDED
 local Lynx = {}
 
-local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local player = game.Players.LocalPlayer
@@ -16,7 +15,7 @@ local function create(class, props)
 end
 
 local function tween(obj, info, props)
-    TweenService:Create(obj, info or TweenInfo.new(0.25, Enum.EasingStyle.Sine), props):Play()
+    TweenService:Create(obj, info or TweenInfo.new(0.25), props):Play()
 end
 
 local function makeDraggable(frame)
@@ -104,10 +103,8 @@ function Lynx:CreateWindow(title, size)
         local tab = {}
         function tab:CreateToggle(name, default, callback)
             local f = create("Frame", {Size = UDim2.new(1,0,0,32), BackgroundTransparency = 1, Parent = tabContent})
-            create("TextLabel", {
-                Size = UDim2.new(0.75,0,1,0), BackgroundTransparency = 1, Text = name, TextColor3 = Color3.fromRGB(210,210,210),
-                Font = Enum.Font.GothamSemibold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = f
-            })
+            create("TextLabel", {Size = UDim2.new(0.75,0,1,0), BackgroundTransparency = 1, Text = name, TextColor3 = Color3.fromRGB(210,210,210),
+                Font = Enum.Font.GothamSemibold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, Parent = f})
             local box = create("Frame", {Size = UDim2.new(0,42,0,22), Position = UDim2.new(1,-52,0.5,-11), BackgroundColor3 = Color3.fromRGB(45,45,45), Parent = f})
             create("UICorner", {CornerRadius = UDim.new(1,0), Parent = box})
             local cir = create("Frame", {Size = UDim2.new(0,18,0,18), Position = UDim2.new(0,2,0.5,-9), BackgroundColor3 = Color3.fromRGB(90,90,90), Parent = box})
@@ -116,7 +113,7 @@ function Lynx:CreateWindow(title, size)
             local state = default or false
             local function upd()
                 if state then
-                    tween(box, nil, {BackgroundColor3 = Color3.fromRGB(0, 170, 255)})
+                    tween(box, nil, {BackgroundColor3 = Color3.fromRGB(0,170,255)})
                     tween(cir, nil, {Position = UDim2.new(0,22,0.5,-9)})
                 else
                     tween(box, nil, {BackgroundColor3 = Color3.fromRGB(45,45,45)})
@@ -143,30 +140,54 @@ function Lynx:CreateWindow(title, size)
     return window
 end
 
--- REMOTES FROM DUMP
+-- AUTO REMOTE SCANNER & FALLBACK
 local RS = game:GetService("ReplicatedStorage")
-local net = RS.Packages._Index["sleitnick_net@0.2.0"].net
+local netFolder = RS:WaitForChild("Packages",5):WaitForChild("_Index",5):WaitForChild("sleitnick_net@0.2.0",5):WaitForChild("net",5)
 
-local Equip = net["RE/EquipToolFromHotbar"]
-local SellAll = net["RF/SellAllItems"]
-local Charge = net["RF/ChargeFishingRod"]
-local Request = net["RF/RequestFishingMinigameStarted"]
-local Catch = net["RE/CatchFish"]
-local Cancel = net["RF/CancelFishingInputs"]
-local BuyItem = net["RF/PurchaseMarketItem"]
+local remotes = {}
+local function scanRemotes()
+    if not netFolder then return false end
+    for _, child in ipairs(netFolder:GetChildren()) do
+        local name = child.Name:lower()
+        if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
+            if name:find("equip") then remotes.Equip = child end
+            if name:find("sell") then remotes.SellAll = child end
+            if name:find("charge") then remotes.Charge = child end
+            if name:find("request") or name:find("start") then remotes.Request = child end
+            if name:find("catch") or name:find("complete") or name:find("reel") or name:find("finish") then remotes.Catch = child end
+            if name:find("cancel") then remotes.Cancel = child end
+            if name:find("purchase") or name:find("buy") or name:find("market") then remotes.BuyItem = child end
+        end
+    end
+    return next(remotes) ~= nil
+end
+
+local success = scanRemotes()
+if not success then
+    print("🌀 REMOTE SCAN FAILED - Game update besar. Manual check net folder.")
+end
+
+-- FALLBACK NAMES (kalau scan gagal, coba nama umum terbaru)
+remotes.Equip   = remotes.Equip   or netFolder:FindFirstChild("RE/EquipToolFromHotbar")
+remotes.SellAll = remotes.SellAll or netFolder:FindFirstChild("RF/SellAllItems")
+remotes.Charge  = remotes.Charge  or netFolder:FindFirstChild("RF/ChargeFishingRod")
+remotes.Request = remotes.Request or netFolder:FindFirstChild("RF/RequestFishingMinigameStarted")
+remotes.Catch   = remotes.Catch   or netFolder:FindFirstChild("RE/CatchFish") or netFolder:FindFirstChild("RE/CompleteCatch") or netFolder:FindFirstChild("RE/FinishFishing")
+remotes.Cancel  = remotes.Cancel  or netFolder:FindFirstChild("RF/CancelFishingInputs")
+remotes.BuyItem = remotes.BuyItem or netFolder:FindFirstChild("RF/PurchaseMarketItem")
 
 local AutoFishEnabled = false
 
-local function equipRod() pcall(function() Equip:FireServer(1) end) end
+local function equipRod() pcall(function() remotes.Equip:FireServer(1) end) end
 
 local function performCatch()
     pcall(function()
-        Charge:InvokeServer()
+        remotes.Charge:InvokeServer()
         task.wait(0.6 + math.random()/5)
-        Request:InvokeServer(-5718742609204048, -0.397660581386669, 1771146782.714026)
+        remotes.Request:InvokeServer(-5718742609204048, -0.397660581386669, 1771146782.714026)
         task.wait(1.0 + math.random()/3)
-        Catch:FireServer(true)
-        Cancel:InvokeServer(true)
+        remotes.Catch:FireServer(true)
+        remotes.Cancel:InvokeServer(true)
     end)
 end
 
@@ -184,29 +205,30 @@ end)
 spawn(function()
     while true do
         if AutoFishEnabled then
-            pcall(function() SellAll:InvokeServer() end)
+            pcall(function() remotes.SellAll:InvokeServer() end)
         end
         task.wait(10 + math.random(4,10))
     end
 end)
 
 -- UI
-local win = Lynx:CreateWindow("Sentot Fish It 2026")
+local win = Lynx:CreateWindow("Sentot Fish It 2026 - Velocity")
 
 local farmTab = win:CreateTab("Farm")
-farmTab:CreateToggle("Auto Fish", false, function(state)
+farmTab:CreateToggle("Auto Fish (Perfect)", false, function(state)
     AutoFishEnabled = state
 end)
 
 farmTab:CreateButton("Sell Now", function()
-    pcall(function() SellAll:InvokeServer() end)
+    pcall(function() remotes.SellAll:InvokeServer() end)
 end)
 
 local shopTab = win:CreateTab("Shop")
 shopTab:CreateButton("Buy Luck (5)", function()
-    pcall(function() BuyItem:InvokeServer(5) end)
+    pcall(function() remotes.BuyItem:InvokeServer(5) end)
+end)
+shopTab:CreateButton("Buy Shiny (7)", function()
+    pcall(function() remotes.BuyItem:InvokeServer(7) end)
 end)
 
-shopTab:CreateButton("Buy Shiny (7)", function()
-    pcall(function() BuyItem:InvokeServer(7) end)
-end)
+print("🌀 SENTOT READY - UI muncul. Toggle Auto Fish di Farm tab. Remote auto-adapted.")
